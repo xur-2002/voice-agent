@@ -16,6 +16,7 @@ export interface WeComResult {
 
 export interface WeComOptions {
   webhookUrl?: string;
+  publicBaseUrl?: string;
   timeoutMs?: number;
   maxAttempts?: number;
   logger?: LoggerLike;
@@ -35,7 +36,7 @@ export async function sendVisitorWeComMessage(visitor: VisitorLog, options: WeCo
   const payload = {
     msgtype: "markdown",
     markdown: {
-      content: formatVisitorMarkdown(visitor)
+      content: formatVisitorMarkdown(visitor, { publicBaseUrl: options.publicBaseUrl ?? process.env.PUBLIC_BASE_URL })
     }
   };
 
@@ -76,8 +77,11 @@ export async function sendVisitorWeComMessage(visitor: VisitorLog, options: WeCo
   return { ok: false, mock: false, error: lastError || "WeCom notification failed" };
 }
 
-export function formatVisitorMarkdown(visitor: Pick<VisitorLog, "plateNumber" | "targetCompany" | "phone" | "visitReason" | "entryTime">) {
-  return [
+export function formatVisitorMarkdown(
+  visitor: Pick<VisitorLog, "id" | "plateNumber" | "targetCompany" | "phone" | "visitReason" | "entryTime" | "actionToken">,
+  options: { publicBaseUrl?: string } = {}
+) {
+  const lines = [
     "## 🚗 新访客车辆登记",
     "",
     `车牌号：${visitor.plateNumber}  `,
@@ -87,7 +91,19 @@ export function formatVisitorMarkdown(visitor: Pick<VisitorLog, "plateNumber" | 
     `入场时间：${formatShanghaiTime(visitor.entryTime)}  `,
     "",
     "状态：待确认放行"
-  ].join("\n");
+  ];
+
+  const baseUrl = stripTrailingSlash(options.publicBaseUrl ?? "");
+  if (baseUrl && visitor.actionToken) {
+    const token = encodeURIComponent(visitor.actionToken);
+    lines.push(
+      "",
+      `[✅ 确认放行](${baseUrl}/guard/visitors/${visitor.id}/approve?token=${token})  `,
+      `[❌ 拒绝放行](${baseUrl}/guard/visitors/${visitor.id}/reject?token=${token})`
+    );
+  }
+
+  return lines.join("\n");
 }
 
 function tryParseJson(text: string): Record<string, unknown> | null {
@@ -97,4 +113,8 @@ function tryParseJson(text: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+function stripTrailingSlash(value: string) {
+  return value.trim().replace(/\/+$/, "");
 }

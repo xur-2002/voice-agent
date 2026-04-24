@@ -13,6 +13,7 @@ interface BuildAppOptions {
   prisma?: PrismaClient;
   logger?: FastifyServerOptions["logger"];
   wecomWebhookUrl?: string;
+  publicBaseUrl?: string;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -27,6 +28,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   });
   const prisma = options.prisma ?? defaultPrisma;
   const wecomWebhookUrl = options.wecomWebhookUrl ?? env.WECOM_WEBHOOK_URL;
+  const publicBaseUrl = options.publicBaseUrl ?? env.PUBLIC_BASE_URL;
 
   app.register(cors, { origin: true });
 
@@ -36,7 +38,7 @@ export function buildApp(options: BuildAppOptions = {}) {
     time: nowIso()
   }));
 
-  registerToolRoutes(app, { prisma, wecomWebhookUrl });
+  registerToolRoutes(app, { prisma, wecomWebhookUrl, publicBaseUrl });
   registerVisitorRoutes(app, prisma);
   registerGuardRoutes(app, prisma);
   registerCallEventRoutes(app, prisma);

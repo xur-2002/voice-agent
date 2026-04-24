@@ -28,6 +28,7 @@ cd C:\Users\徐大师\voice-agent
 
 $env:VAPI_API_KEY="paste_your_private_vapi_api_key_here"
 $env:VAPI_TOOL_ID="f478648e-5537-4b11-a5f5-6330b45c8017"
+$env:VALIDATE_PHONE_TOOL_ID="optional_validate_phone_tool_id"
 $env:PUBLIC_BASE_URL="https://footwear-smooth-during-testimony.trycloudflare.com"
 
 npm.cmd run vapi:list-tools
@@ -66,6 +67,7 @@ The script creates:
 - Chinese first message
 - Chinese visitor registration system prompt
 - Existing Vapi Tool ID attached through the assistant model configuration when accepted by Vapi
+- Optional `validatePhone` Tool ID attached when `VALIDATE_PHONE_TOOL_ID` is set
 - Call events webhook pointing to `PUBLIC_BASE_URL + "/webhooks/call-events"` when accepted by Vapi
 
 The script tries low-latency model configs in this order:
@@ -81,6 +83,41 @@ If tool attachment is rejected, the assistant is still created and the script pr
 ```text
 Vapi Dashboard → Assistants → 工业园区访客登记助手 → Tools → Add Tool → submitVisitor → Publish
 ```
+
+## Optional Phone Validation Tool
+
+To make real calls more reliable, create a second Vapi API Request tool manually:
+
+- Tool name: `validatePhone`
+- URL: `PUBLIC_BASE_URL + "/tools/validate-phone"`
+- Method: `POST`
+- Headers: `Content-Type: application/json`
+- Body:
+
+```json
+{
+  "phone": "string",
+  "call_id": "string optional"
+}
+```
+
+After creating it, set the ID before running the assistant script:
+
+```powershell
+$env:VALIDATE_PHONE_TOOL_ID="paste_validate_phone_tool_id_here"
+```
+
+The prompt asks the assistant to call `validatePhone`, repeat the normalized 11-digit phone number, and call `submitVisitor` only after the user confirms.
+
+## Optional DTMF-Ready Endpoint
+
+The backend also exposes:
+
+```text
+PUBLIC_BASE_URL + "/tools/phone-digits"
+```
+
+Use this only if the voice provider can pass inbound caller keypad digits to your backend. Vapi's DTMF tool is mainly for sending DTMF tones from the AI to IVRs; do not use it to fake caller keypad capture unless actual inbound DTMF events are visible in `/webhooks/call-events` logs.
 
 ## Bind Phone Number
 

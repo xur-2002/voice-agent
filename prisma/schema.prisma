@@ -18,6 +18,11 @@ model VisitorLog {
   callId        String?  @unique
   rawSummary    String?
   status        String   @default("notified")
+  actionToken   String?  @unique
+  approvedAt    DateTime?
+  rejectedAt    DateTime?
+  decisionSource String?
+  decisionNote  String?
   wecomSentAt   DateTime?
   wecomError    String?
   createdAt     DateTime @default(now())

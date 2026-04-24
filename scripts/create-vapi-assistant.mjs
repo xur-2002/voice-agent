@@ -34,6 +34,17 @@ const SYSTEM_PROMPT = `你是工业园区停车场入口的真人门卫式语音
 - 如果用户表达很口语化，要自动理解。例如“蓝鲸”“蓝色鲸鱼”都可以理解为目标公司。
 - 如果工具返回成功，不要继续追问。
 
+手机号采集策略：
+- 询问手机号时，不要说“手机号方便留一下吗？”，而是说：“收到，手机号麻烦一位一位说一下。”
+- 如果用户一次性说太快，或识别结果不是明确11位数字，只追问手机号，不要重新问车牌、公司、事由。
+- 听到手机号后，先调用 validatePhone 工具验证格式（如果该工具已绑定）。
+- 如果 validatePhone 返回 valid=true，向用户复述：“我确认一下，手机号是 13386652510，对吗？”
+- 用户确认后再调用 submitVisitor。
+- 如果用户否认或 validatePhone 返回 invalid，只重新询问手机号。
+- 如果平台支持按键输入，可提示：“也可以直接用手机键盘输入手机号，输完按井号键。”但当前 Vapi 是否能接收 caller DTMF 需要以实际事件日志为准。
+- 不要使用 Vapi 的 DTMF sending tool 来假装收集用户按键。该工具主要用于 AI 向 IVR 发送按键音。
+- 手机号可以理解中文数字，例如“一三三八六六五二五一零”应理解为“13386652510”。
+
 对话目标：
 普通访客最多3轮完成。
 从电话接通到提交登记应尽量控制在25秒以内。
@@ -41,15 +52,20 @@ const SYSTEM_PROMPT = `你是工业园区停车场入口的真人门卫式语音
 示例对话：
 助手：您好，这里是园区访客登记。麻烦说下车牌号、找哪家公司、来做什么事儿？
 用户：沪A12345，来蓝色鲸鱼送货。
-助手：收到，手机号方便留一下吗？
+助手：收到，手机号麻烦一位一位说一下。
 用户：13812341234。
+助手调用 validatePhone。
+助手：我确认一下，手机号是 13812341234，对吗？
+用户：对。
 助手调用 submitVisitor。
 助手：好的，已通知门卫，请稍等放行。`;
 
 const apiKey = process.env.VAPI_API_KEY;
 const toolId = process.env.VAPI_TOOL_ID || DEFAULT_TOOL_ID;
+const validatePhoneToolId = process.env.VALIDATE_PHONE_TOOL_ID || "";
 const publicBaseUrl = stripTrailingSlash(process.env.PUBLIC_BASE_URL || DEFAULT_PUBLIC_BASE_URL);
 const submitVisitorUrl = `${publicBaseUrl}/tools/submit-visitor`;
+const validatePhoneUrl = `${publicBaseUrl}/tools/validate-phone`;
 const callEventsUrl = `${publicBaseUrl}/webhooks/call-events`;
 
 if (!apiKey) {
@@ -65,7 +81,9 @@ if (!apiKey) {
 async function main() {
   console.log(`Creating Vapi Assistant: ${ASSISTANT_NAME}`);
   console.log(`Existing Vapi Tool ID: ${toolId}`);
+  if (validatePhoneToolId) console.log(`Optional validatePhone Tool ID: ${validatePhoneToolId}`);
   console.log(`Public submitVisitor URL: ${submitVisitorUrl}`);
+  console.log(`Public validatePhone URL: ${validatePhoneUrl}`);
   console.log(`Call events webhook URL: ${callEventsUrl}`);
 
   await warnIfToolLookupFails(toolId);
@@ -217,12 +235,13 @@ function assistantPayload(
     metadata: {
       app: "voice-agent",
       purpose: "industrial-park-visitor-registration",
-      submitVisitorUrl
+      submitVisitorUrl,
+      validatePhoneUrl
     }
   };
 
   if (attachTool && toolAttachment === "model.toolIds") {
-    payload.model.toolIds = [toolId];
+    payload.model.toolIds = [toolId, validatePhoneToolId].filter(Boolean);
   }
 
   if (attachTool && toolAttachment === "model.tools") {
@@ -231,8 +250,15 @@ function assistantPayload(
         id: toolId,
         type: "tool",
         name: "submitVisitor"
-      }
-    ];
+      },
+      validatePhoneToolId
+        ? {
+            id: validatePhoneToolId,
+            type: "tool",
+            name: "validatePhone"
+          }
+        : undefined
+    ].filter(Boolean);
   }
 
   if (includeTranscriber) {
@@ -341,11 +367,13 @@ function printResult(result) {
   console.log(`Dashboard URL: ${assistant.id ? `https://dashboard.vapi.ai/assistants/${assistant.id}` : "(unknown)"}`);
   console.log(`Model used: ${result.model.provider}/${result.model.model}`);
   console.log(`Existing Tool ID: ${toolId}`);
+  console.log(`Optional validatePhone Tool ID: ${validatePhoneToolId || "(not provided)"}`);
   console.log(`Tool attached: ${result.toolAttached ? "yes" : "no"}`);
   console.log(`Tool attachment format: ${result.toolAttachment}`);
   console.log(`Voice configured: ${result.voiceConfigured ? "yes" : "no"}`);
   console.log(`Transcriber configured: ${result.transcriberConfigured ? "yes" : "no"}`);
   console.log(`Public submitVisitor URL: ${submitVisitorUrl}`);
+  console.log(`Public validatePhone URL: ${validatePhoneUrl}`);
   console.log(`Call events webhook URL: ${callEventsUrl}`);
   console.log(`Creation path: ${result.creationPath}`);
   console.log("");

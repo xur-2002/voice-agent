@@ -23,8 +23,16 @@ describe("normalization", () => {
 
   it("normalizes and validates Chinese mobile numbers", () => {
     expect(normalizePhone("+86 138-1234-1234")).toBe("13812341234");
+    expect(normalizePhone("一三三八六六五二五一零")).toBe("13386652510");
+    expect(normalizePhone("一三三，八六六，五二五，一零")).toBe("13386652510");
+    expect(normalizePhone("133 866 525 10")).toBe("13386652510");
+    expect(normalizePhone("133，866，525，10")).toBe("13386652510");
+    expect(normalizePhone("手机号是一三三八六六五二五一零")).toBe("13386652510");
+    expect(normalizePhone("我的手机号是 133 866 525 10")).toBe("13386652510");
+    expect(normalizePhone("幺三三八六六五二五一零")).toBe("13386652510");
     expect(isValidPhone("13812341234")).toBe(true);
     expect(isValidPhone("12345")).toBe(false);
+    expect(isValidPhone("138xxxx1234")).toBe(false);
   });
 
   it("maps common visit reasons", () => {

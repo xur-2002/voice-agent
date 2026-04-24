@@ -16,6 +16,22 @@ const digitSpeechMap: Record<string, string> = {
   九: "9"
 };
 
+const phoneDigitSpeechMap: Record<string, string> = {
+  零: "0",
+  〇: "0",
+  一: "1",
+  幺: "1",
+  二: "2",
+  两: "2",
+  三: "3",
+  四: "4",
+  五: "5",
+  六: "6",
+  七: "7",
+  八: "8",
+  九: "9"
+};
+
 const builtInCompanyAliases = new Map([
   ["蓝色金鱼", "蓝色鲸鱼科技"],
   ["蓝色鲸鱼", "蓝色鲸鱼科技"],
@@ -47,7 +63,15 @@ function normalizeShanghaiPlateArtifacts(value: string) {
 }
 
 export function normalizePhone(input: string) {
-  const compact = input.trim().replace(/[^\d+]/g, "");
+  if (hasMaskedPhonePlaceholder(input)) {
+    return input.trim().replace(/\s/g, "");
+  }
+
+  const spokenAsDigits = Array.from(removePhoneFillers(input.trim()))
+    .map((char) => phoneDigitSpeechMap[char] ?? normalizeFullWidthDigit(char))
+    .join("");
+
+  const compact = spokenAsDigits.replace(/[^\d+]/g, "");
   if (compact.startsWith("+86") && /^(\+86)1\d{10}$/.test(compact)) {
     return compact.slice(3);
   }
@@ -58,8 +82,25 @@ export function normalizePhone(input: string) {
 }
 
 export function isValidPhone(input: string) {
+  if (hasMaskedPhonePlaceholder(input)) return false;
   const phone = normalizePhone(input);
   return /^1\d{10}$/.test(phone) || /^\+1\d{10}$/.test(phone) || /^\+\d{8,15}$/.test(phone);
+}
+
+export function hasMaskedPhonePlaceholder(input: string) {
+  return /[xX*＊]/.test(input);
+}
+
+function removePhoneFillers(input: string) {
+  return input.replace(/手机号|电话|我的|是|号码|联系方式|逗号|空格/g, "");
+}
+
+function normalizeFullWidthDigit(char: string) {
+  const code = char.charCodeAt(0);
+  if (code >= 0xff10 && code <= 0xff19) {
+    return String(code - 0xff10);
+  }
+  return char;
 }
 
 export function normalizeVisitReason(input: string) {

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { z } from "zod";
+import { openGateForVisitor } from "../services/gate-control.js";
 import { answerGuardQuestion } from "../services/guardQuery.js";
 
 const guardQuerySchema = z.object({
@@ -12,6 +13,22 @@ export function registerGuardRoutes(app: FastifyInstance, prisma: PrismaClient) 
     return reply.type("text/html; charset=utf-8").send(renderGuardPage());
   });
 
+  app.get<{ Params: { id: string }; Querystring: { token?: string } }>(
+    "/guard/visitors/:id/approve",
+    async (request, reply) => {
+      const result = await decideVisitor(request.params.id, request.query.token, "approved", prisma, request.log);
+      return reply.code(result.httpStatus).type("text/html; charset=utf-8").send(result.html);
+    }
+  );
+
+  app.get<{ Params: { id: string }; Querystring: { token?: string } }>(
+    "/guard/visitors/:id/reject",
+    async (request, reply) => {
+      const result = await decideVisitor(request.params.id, request.query.token, "rejected", prisma, request.log);
+      return reply.code(result.httpStatus).type("text/html; charset=utf-8").send(result.html);
+    }
+  );
+
   app.post("/guard/query", async (request, reply) => {
     const parsed = guardQuerySchema.safeParse(request.body);
     if (!parsed.success) {
@@ -22,6 +39,93 @@ export function registerGuardRoutes(app: FastifyInstance, prisma: PrismaClient) 
     }
 
     return reply.send(await answerGuardQuestion(parsed.data.question, prisma));
+  });
+}
+
+async function decideVisitor(
+  id: string,
+  token: string | undefined,
+  decision: "approved" | "rejected",
+  prisma: PrismaClient,
+  logger: Parameters<typeof openGateForVisitor>[1]
+) {
+  const visitor = await prisma.visitorLog.findUnique({ where: { id } });
+  if (!visitor || !token || visitor.actionToken !== token) {
+    return {
+      httpStatus: 403,
+      html: renderDecisionPage("操作无效或链接已过期。")
+    };
+  }
+
+  if (visitor.status === "approved") {
+    return {
+      httpStatus: 200,
+      html: renderDecisionPage(`已确认放行：${visitor.plateNumber}`)
+    };
+  }
+
+  if (visitor.status === "rejected") {
+    return {
+      httpStatus: 200,
+      html: renderDecisionPage(`已拒绝放行：${visitor.plateNumber}`)
+    };
+  }
+
+  const now = new Date();
+  const updated = await prisma.visitorLog.update({
+    where: { id },
+    data:
+      decision === "approved"
+        ? { status: "approved", approvedAt: now, decisionSource: "wecom-link" }
+        : { status: "rejected", rejectedAt: now, decisionSource: "wecom-link" }
+  });
+
+  if (decision === "approved") {
+    await openGateForVisitor(updated, logger);
+  }
+
+  return {
+    httpStatus: 200,
+    html: renderDecisionPage(
+      decision === "approved" ? `已确认放行：${updated.plateNumber}` : `已拒绝放行：${updated.plateNumber}`
+    )
+  };
+}
+
+function renderDecisionPage(message: string) {
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>门岗操作结果</title>
+  <style>
+    :root { color-scheme: light; font-family: Arial, "Microsoft YaHei", sans-serif; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f6f7f9; color: #1f2933; }
+    main { width: min(92vw, 420px); background: #fff; border: 1px solid #d9dee7; border-radius: 8px; padding: 24px; text-align: center; }
+    h1 { margin: 0; font-size: 22px; line-height: 1.4; }
+    a { display: inline-block; margin-top: 18px; color: #2563eb; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>${escapeHtml(message)}</h1>
+    <a href="/guard">返回登记页</a>
+  </main>
+</body>
+</html>`;
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (char) => {
+    const replacements: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    };
+    return replacements[char] ?? char;
   });
 }
 
@@ -82,7 +186,7 @@ function renderGuardPage() {
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>入场时间</th><th>车牌</th><th>来访单位</th><th>手机号</th><th>事由</th><th>状态</th></tr>
+            <tr><th>入场时间</th><th>车牌</th><th>来访单位</th><th>手机号</th><th>事由</th><th>状态</th><th>处理时间</th></tr>
           </thead>
           <tbody id="visitors"></tbody>
         </table>
@@ -132,6 +236,8 @@ function renderGuardPage() {
       const data = await response.json();
       visitors.innerHTML = (data.visitors || []).map((visitor) => {
         const time = new Date(visitor.entry_time).toLocaleString("zh-CN", { hour12: false });
+        const decisionTime = visitor.approved_at || visitor.rejected_at;
+        const decisionLabel = decisionTime ? new Date(decisionTime).toLocaleString("zh-CN", { hour12: false }) : "";
         return "<tr>" +
           "<td>" + escapeHtml(time) + "</td>" +
           "<td>" + escapeHtml(visitor.plate_number) + "</td>" +
@@ -139,6 +245,7 @@ function renderGuardPage() {
           "<td>" + escapeHtml(visitor.phone) + "</td>" +
           "<td>" + escapeHtml(visitor.visit_reason) + "</td>" +
           "<td>" + escapeHtml(visitor.status) + "</td>" +
+          "<td>" + escapeHtml(decisionLabel) + "</td>" +
         "</tr>";
       }).join("");
     }

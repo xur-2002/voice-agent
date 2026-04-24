@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { PrismaClient, VisitorLog } from "@prisma/client";
 import type { FastifyBaseLogger } from "fastify";
 import type {
@@ -35,6 +36,7 @@ interface VisitorServiceDeps {
   prisma: PrismaClient;
   logger: FastifyBaseLogger;
   wecomWebhookUrl?: string;
+  publicBaseUrl?: string;
 }
 
 export interface SubmitVisitorServiceResponse {
@@ -96,6 +98,7 @@ export async function submitVisitor(
       callerNumber: validation.input.callerNumber,
       callId: validation.input.callId,
       rawSummary: validation.input.rawSummary,
+      actionToken: generateActionToken(),
       status: "pending"
     }
   });
@@ -105,6 +108,7 @@ export async function submitVisitor(
   const wecomStartedAt = process.hrtime.bigint();
   const wecom = await sendVisitorWeComMessage(visitor, {
     webhookUrl: deps.wecomWebhookUrl,
+    publicBaseUrl: deps.publicBaseUrl,
     logger: deps.logger
   });
   const wecomSentMs = elapsedMs(wecomStartedAt);
@@ -235,6 +239,24 @@ export async function listVisitors(
   return visitors.map(toPublicVisitorLog);
 }
 
+export function validatePhoneForVoice(input: string) {
+  const normalizedPhone = normalizePhone(input);
+  if (isValidPhone(input)) {
+    return {
+      ok: true as const,
+      valid: true as const,
+      normalized_phone: normalizedPhone,
+      message: `手机号已识别为 ${normalizedPhone}，请向用户确认。`
+    };
+  }
+
+  return {
+    ok: true as const,
+    valid: false as const,
+    message: "手机号没有识别清楚，请让用户一位一位重复，或者改用按键输入。"
+  };
+}
+
 async function normalizeAndValidate(
   input: SubmitVisitorInput,
   prisma: PrismaClient
@@ -255,23 +277,23 @@ async function normalizeAndValidate(
     };
   }
 
-  const lowConfidenceField = findLowConfidenceField(input);
-  if (lowConfidenceField) {
+  const plateNumber = normalizePlateNumber(input.plate_number ?? "");
+  const phone = normalizePhone(input.phone ?? "");
+  const targetCompany = await normalizeCompany(input.target_company ?? "", prisma);
+  const visitReason = normalizeVisitReason(input.visit_reason ?? "");
+
+  if (input.confidence?.plate_number !== undefined && input.confidence.plate_number < 0.75) {
     return {
       ok: false,
       result: {
         ok: false,
         status: "needs_confirmation",
-        field: lowConfidenceField,
-        message: VALIDATION_MESSAGES[lowConfidenceField]
+        field: "plate_number",
+        message: VALIDATION_MESSAGES.plate_number
       }
     };
   }
 
-  const plateNumber = normalizePlateNumber(input.plate_number ?? "");
-  const phone = normalizePhone(input.phone ?? "");
-  const targetCompany = await normalizeCompany(input.target_company ?? "", prisma);
-  const visitReason = normalizeVisitReason(input.visit_reason ?? "");
   const invalidFields: SubmitField[] = [];
 
   if (plateNumber.length < 5) invalidFields.push("plate_number");
@@ -286,7 +308,9 @@ async function normalizeAndValidate(
         ok: false,
         status: "missing_or_invalid_fields",
         fields: invalidFields,
-        message: `缺少或无效字段：${invalidFields.join(", ")}。`
+        message: invalidFields.includes("phone")
+          ? "手机号没有识别清楚，请让用户一位一位重复，或者改用按键输入。"
+          : `缺少或无效字段：${invalidFields.join(", ")}。`
       }
     };
   }
@@ -306,12 +330,6 @@ async function normalizeAndValidate(
 }
 
 const requiredFields: SubmitField[] = ["plate_number", "target_company", "phone", "visit_reason"];
-
-function findLowConfidenceField(input: SubmitVisitorInput): SubmitField | null {
-  if (input.confidence?.plate_number !== undefined && input.confidence.plate_number < 0.75) return "plate_number";
-  if (input.confidence?.phone !== undefined && input.confidence.phone < 0.85) return "phone";
-  return null;
-}
 
 async function updateVisitorProfile(visitor: VisitorLog, prisma: PrismaClient) {
   const profile = await prisma.visitorProfile.findFirst({
@@ -364,4 +382,8 @@ function buildDateWhere(from?: string, to?: string) {
     if (!Number.isNaN(parsed.getTime())) entryTime.lte = parsed;
   }
   return Object.keys(entryTime).length > 0 ? { entryTime } : {};
+}
+
+function generateActionToken() {
+  return randomBytes(24).toString("base64url");
 }

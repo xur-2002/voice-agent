@@ -96,6 +96,11 @@ export type PublicVisitorLog = {
   call_id?: string;
   raw_summary?: string;
   status: string;
+  action_token?: string;
+  approved_at?: string;
+  rejected_at?: string;
+  decision_source?: string;
+  decision_note?: string;
   wecom_sent_at?: string;
   wecom_error?: string;
 };
@@ -112,6 +117,11 @@ export function toPublicVisitorLog(visitor: VisitorLog): PublicVisitorLog {
     call_id: visitor.callId ?? undefined,
     raw_summary: visitor.rawSummary ?? undefined,
     status: visitor.status,
+    action_token: visitor.actionToken ?? undefined,
+    approved_at: visitor.approvedAt?.toISOString(),
+    rejected_at: visitor.rejectedAt?.toISOString(),
+    decision_source: visitor.decisionSource ?? undefined,
+    decision_note: visitor.decisionNote ?? undefined,
     wecom_sent_at: visitor.wecomSentAt?.toISOString(),
     wecom_error: visitor.wecomError ?? undefined
   };
