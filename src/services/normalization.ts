@@ -1,0 +1,85 @@
+import type { PrismaClient } from "@prisma/client";
+
+const digitSpeechMap: Record<string, string> = {
+  零: "0",
+  洞: "0",
+  幺: "1",
+  一: "1",
+  二: "2",
+  两: "2",
+  三: "3",
+  四: "4",
+  五: "5",
+  六: "6",
+  七: "7",
+  八: "8",
+  九: "9"
+};
+
+const builtInCompanyAliases = new Map([
+  ["蓝色鲸鱼", "蓝色鲸鱼科技"],
+  ["蓝鲸", "蓝色鲸鱼科技"],
+  ["蓝鲸科技", "蓝色鲸鱼科技"],
+  ["星河智能", "星河智能制造有限公司"],
+  ["星河", "星河智能制造有限公司"]
+]);
+
+export function normalizePlateNumber(input: string) {
+  let value = input
+    .trim()
+    .replace(/[，,。.\s\-—_/]/g, "")
+    .replace(/车牌号是?|车牌是?|牌照是?|我的车牌|号码/g, "");
+
+  value = Array.from(value)
+    .map((char) => digitSpeechMap[char] ?? char)
+    .join("")
+    .toUpperCase();
+
+  return value;
+}
+
+export function normalizePhone(input: string) {
+  const compact = input.trim().replace(/[^\d+]/g, "");
+  if (compact.startsWith("+86") && /^(\+86)1\d{10}$/.test(compact)) {
+    return compact.slice(3);
+  }
+  if (/^861\d{10}$/.test(compact)) {
+    return compact.slice(2);
+  }
+  return compact;
+}
+
+export function isValidPhone(input: string) {
+  const phone = normalizePhone(input);
+  return /^1\d{10}$/.test(phone) || /^\+1\d{10}$/.test(phone) || /^\+\d{8,15}$/.test(phone);
+}
+
+export function normalizeVisitReason(input: string) {
+  const value = input.trim().replace(/\s/g, "");
+  if (!value) return "其他";
+
+  if (/(送东西|送货|送货的|配送|快递|货物|卸货)/.test(value)) return "送货";
+  if (/(面试|来面试|应聘|找工作)/.test(value)) return "面试";
+  if (/(拜访|找人|开会|见客户|谈事|洽谈)/.test(value)) return "拜访";
+  if (/(修东西|维修|维护|检修|保养|修理)/.test(value)) return "维修";
+  return "其他";
+}
+
+export async function normalizeCompany(input: string, prisma?: PrismaClient) {
+  const cleaned = input.trim().replace(/\s/g, "");
+  if (!cleaned) return cleaned;
+
+  const builtIn = builtInCompanyAliases.get(cleaned);
+  if (builtIn) return builtIn;
+
+  if (prisma) {
+    const alias = await prisma.companyAlias.findUnique({ where: { alias: cleaned } });
+    if (alias) return alias.canonicalName;
+  }
+
+  return cleaned;
+}
+
+export function normalizeOptionalPhone(input?: string) {
+  return input ? normalizePhone(input) : undefined;
+}
