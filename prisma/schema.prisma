@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model VisitorLog {
+  id            String   @id @default(cuid())
+  plateNumber   String
+  targetCompany String
+  phone         String
+  visitReason   String
+  callerNumber  String?
+  entryTime     DateTime @default(now())
+  callId        String?  @unique
+  rawSummary    String?
+  status        String   @default("notified")
+  wecomSentAt   DateTime?
+  wecomError    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([entryTime])
+  @@index([plateNumber])
+  @@index([phone])
+  @@index([targetCompany])
+}
+
+model VisitorProfile {
+  id            String   @id @default(cuid())
+  phone         String?
+  callerNumber  String?
+  plateNumber   String?
+  targetCompany String?
+  visitReason   String?
+  lastVisitAt   DateTime?
+  visitCount    Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([phone])
+  @@index([callerNumber])
+  @@index([plateNumber])
+}
+
+model CompanyAlias {
+  id            String @id @default(cuid())
+  alias         String @unique
+  canonicalName String
+}
+
+model CallEvent {
+  id        String   @id @default(cuid())
+  provider  String?
+  callId    String?
+  eventType String
+  payload   Json
+  createdAt DateTime @default(now())
+
+  @@index([callId])
+  @@index([eventType])
+  @@index([createdAt])
+}
