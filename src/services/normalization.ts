@@ -17,6 +17,7 @@ const digitSpeechMap: Record<string, string> = {
 };
 
 const builtInCompanyAliases = new Map([
+  ["蓝色金鱼", "蓝色鲸鱼科技"],
   ["蓝色鲸鱼", "蓝色鲸鱼科技"],
   ["蓝鲸", "蓝色鲸鱼科技"],
   ["蓝鲸科技", "蓝色鲸鱼科技"],
@@ -35,6 +36,13 @@ export function normalizePlateNumber(input: string) {
     .join("")
     .toUpperCase();
 
+  return normalizeShanghaiPlateArtifacts(value);
+}
+
+function normalizeShanghaiPlateArtifacts(value: string) {
+  if (/^互为\d{5}$/.test(value)) return value.replace(/^互为/, "沪A");
+  if (/^互为[A-Z]\d{5}$/.test(value)) return value.replace(/^互为/, "沪");
+  if (/^[户护沪?][A-Z]\d{5}$/.test(value)) return value.replace(/^[户护沪?]/, "沪");
   return value;
 }
 

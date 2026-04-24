@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isValidPhone,
+  normalizeCompany,
   normalizePhone,
   normalizePlateNumber,
   normalizeVisitReason
@@ -9,6 +10,15 @@ import {
 describe("normalization", () => {
   it("normalizes spoken plate numbers", () => {
     expect(normalizePlateNumber("  沪 a 幺二三四五 ")).toBe("沪A12345");
+  });
+
+  it("repairs common Shanghai plate ASR artifacts", () => {
+    expect(normalizePlateNumber("?A12345")).toBe("沪A12345");
+    expect(normalizePlateNumber("互为12345")).toBe("沪A12345");
+    expect(normalizePlateNumber("沪 A 12345")).toBe("沪A12345");
+    expect(normalizePlateNumber("沪，A，一二三四五")).toBe("沪A12345");
+    expect(normalizePlateNumber("户A12345")).toBe("沪A12345");
+    expect(normalizePlateNumber("护A12345")).toBe("沪A12345");
   });
 
   it("normalizes and validates Chinese mobile numbers", () => {
@@ -23,5 +33,11 @@ describe("normalization", () => {
     expect(normalizeVisitReason("找人开会")).toBe("拜访");
     expect(normalizeVisitReason("维护设备")).toBe("维修");
     expect(normalizeVisitReason("别的事")).toBe("其他");
+  });
+
+  it("maps common company aliases", async () => {
+    await expect(normalizeCompany("蓝色金鱼")).resolves.toBe("蓝色鲸鱼科技");
+    await expect(normalizeCompany("蓝色鲸鱼")).resolves.toBe("蓝色鲸鱼科技");
+    await expect(normalizeCompany("蓝鲸")).resolves.toBe("蓝色鲸鱼科技");
   });
 });

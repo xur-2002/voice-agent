@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 const aliases = [
+  ["蓝色金鱼", "蓝色鲸鱼科技"],
   ["蓝色鲸鱼", "蓝色鲸鱼科技"],
   ["蓝鲸", "蓝色鲸鱼科技"],
   ["蓝鲸科技", "蓝色鲸鱼科技"],
