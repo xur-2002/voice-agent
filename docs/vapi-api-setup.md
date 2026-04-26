@@ -119,7 +119,7 @@ PUBLIC_BASE_URL + "/tools/phone-digits"
 
 Use this only if the voice provider can pass inbound caller keypad digits to your backend. Vapi's DTMF tool is mainly for sending DTMF tones from the AI to IVRs; do not use it to fake caller keypad capture unless actual inbound DTMF events are visible in `/webhooks/call-events` logs.
 
-## Pass Caller Number To Tools
+## Caller Number First Setup
 
 To avoid asking every visitor to speak a phone number, pass Vapi's caller ID into the existing `submitVisitor` API Request Tool.
 
@@ -132,6 +132,18 @@ caller_number = {{ customer.number }}
 Vapi API Request tools support Liquid-style variables. When `customer.number` is available for an inbound call, the backend will normalize it and use it as the default contact phone if the spoken `phone` field is missing or invalid.
 
 For the best caller-number-first flow, make the `phone` body field optional in the Vapi tool schema. Keep `plate_number`, `target_company`, and `visit_reason` required. The backend will still reject the request if neither `phone` nor `caller_number` is valid.
+
+Publish the Tool and Assistant after changing the request body.
+
+Ideal test call:
+
+```text
+AI: 您好，这里是园区访客登记。麻烦说下车牌号、找哪家公司、来做什么事儿？
+User: 沪，A，一二三四五，来蓝色鲸鱼送货。
+AI: 我看到您的来电号码尾号 XXXX，可以作为联系电话吗？
+User: 可以。
+AI: 好的，已通知门卫，请稍等放行。
+```
 
 You can also create an optional resolver tool:
 
