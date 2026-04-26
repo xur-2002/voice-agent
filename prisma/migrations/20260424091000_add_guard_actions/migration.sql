@@ -1,7 +1,7 @@
 -- Add guard decision fields used by WeCom one-click approval links.
 ALTER TABLE "VisitorLog" ADD COLUMN "actionToken" TEXT;
-ALTER TABLE "VisitorLog" ADD COLUMN "approvedAt" DATETIME;
-ALTER TABLE "VisitorLog" ADD COLUMN "rejectedAt" DATETIME;
+ALTER TABLE "VisitorLog" ADD COLUMN "approvedAt" TIMESTAMP(3);
+ALTER TABLE "VisitorLog" ADD COLUMN "rejectedAt" TIMESTAMP(3);
 ALTER TABLE "VisitorLog" ADD COLUMN "decisionSource" TEXT;
 ALTER TABLE "VisitorLog" ADD COLUMN "decisionNote" TEXT;
 

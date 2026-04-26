@@ -12,7 +12,7 @@ export default function setup() {
   closeSync(openSync(resolve("prisma/test.db"), "w"));
 
   const prismaCli = resolve("node_modules/prisma/build/index.js");
-  execFileSync(process.execPath, [prismaCli, "migrate", "deploy"], {
+  execFileSync(process.execPath, [prismaCli, "db", "push", "--schema", "prisma/schema.test.prisma", "--force-reset", "--skip-generate"], {
     stdio: "inherit",
     env: {
       ...process.env,

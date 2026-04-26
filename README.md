@@ -1,12 +1,12 @@
 # AI Voice Visitor Registration
 
-Production-style MVP for an industrial park entrance: a Chinese voice agent collects visitor vehicle info, calls a backend tool API, stores the record, and sends a WeCom group robot message for the guard.
+Production-style MVP for an industrial park entrance: a Chinese voice agent collects visitor vehicle info, calls a backend tool API, stores the record in PostgreSQL, and sends a WeCom group robot message for the guard.
 
 ```mermaid
 flowchart LR
   A[Visitor calls phone number] --> B[Vapi or Retell Voice Agent]
   B --> C[Backend Tool API]
-  C --> D[(SQLite local / PostgreSQL prod)]
+  C --> D[(Neon PostgreSQL)]
   C --> E[WeCom Group Robot]
   E --> F[Guard approves or rejects]
   G[Guard Query Page] --> C
@@ -31,6 +31,7 @@ The final demo uses explicit digit-by-digit phone collection for reliability. Th
 ```powershell
 npm.cmd install
 copy .env.example .env
+# Fill DATABASE_URL and DIRECT_URL with Neon PostgreSQL connection strings.
 npx.cmd prisma generate
 npx.cmd prisma migrate dev
 npm.cmd run seed
@@ -47,7 +48,8 @@ curl.exe http://127.0.0.1:3000/health
 
 ```text
 PORT=3000
-DATABASE_URL="file:./dev.db"
+DATABASE_URL="postgresql://USER:PASSWORD@HOST-pooler.REGION.aws.neon.tech/DB?sslmode=require"
+DIRECT_URL="postgresql://USER:PASSWORD@HOST.REGION.aws.neon.tech/DB?sslmode=require"
 WECOM_WEBHOOK_URL=""
 PUBLIC_BASE_URL="http://localhost:3000"
 VOICE_PROVIDER="vapi"
@@ -74,7 +76,7 @@ Never commit `.env`, Vapi keys, WeCom webhooks, phone numbers, or production dat
 
 Use [docs/voice-agent-prompt.md](docs/voice-agent-prompt.md) for the prompt and schemas.
 
-When the tunnel URL changes:
+When the tunnel URL changes or after Render deploy:
 
 ```powershell
 $env:VAPI_API_KEY="paste_private_key_here"
@@ -116,6 +118,18 @@ npm.cmd run build
 
 See [docs/test-report.md](docs/test-report.md) for final demo notes and acceptance checklist.
 
+## Render + Neon
+
+This branch is cloud-ready for Render and Neon PostgreSQL. Use:
+
+```text
+Build: npm install && npx prisma generate && npm run build
+Start: npx prisma migrate deploy && npm run start
+Health: /health
+```
+
+Full steps are in [docs/render-neon-deployment.md](docs/render-neon-deployment.md).
+
 ## Production Path
 
-Move from SQLite to PostgreSQL, add auth around `/guard` and `/visitors`, add webhook signatures, persist Cloudflare/Vapi URLs in deployment config, add observability and rate limits, and replace mock gate control with the real parking barrier integration.
+Add auth around `/guard` and `/visitors`, add webhook signatures, add observability and rate limits, and replace mock gate control with the real parking barrier integration.

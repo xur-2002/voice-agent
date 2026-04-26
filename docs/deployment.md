@@ -1,76 +1,74 @@
 # Deployment Notes
 
-## Local
+The cloud-ready branch uses PostgreSQL as the main Prisma provider. Use Neon for Render/Railway/Fly deployments. SQLite is only used by the test schema.
 
-```bash
-npm install
-cp .env.example .env
-npx prisma generate
-npx prisma migrate dev
-npm run seed
-npm run dev
+## Local With Neon
+
+```powershell
+npm.cmd install
+copy .env.example .env
+npx.cmd prisma generate
+npx.cmd prisma migrate dev
+npm.cmd run seed
+npm.cmd run dev
 ```
 
-Local SQLite lives at `prisma/dev.db`.
+Set `DATABASE_URL` and `DIRECT_URL` to Neon connection strings in `.env`.
 
-## Render or Railway
+## Render
 
-1. Create a Node.js 20 service.
-2. Set build command:
-   ```bash
-   npm ci && npx prisma generate && npm run build
-   ```
-3. Set start command:
-   ```bash
-   npm run start
-   ```
-4. Configure environment variables:
-   - `PORT`
-   - `DATABASE_URL`
-   - `WECOM_WEBHOOK_URL`
-   - `PUBLIC_BASE_URL`
-   - `NODE_ENV=production`
-5. Run migrations during release/deploy:
-   ```bash
-   npx prisma migrate deploy
-   ```
+Use [render-neon-deployment.md](render-neon-deployment.md).
 
-The default Prisma schema is SQLite for local acceptance. For Neon/PostgreSQL, change `provider = "sqlite"` to `provider = "postgresql"` in `prisma/schema.prisma`, set a PostgreSQL `DATABASE_URL`, and create a production migration before deploying.
+Short version:
+
+```text
+Build command: npm install && npx prisma generate && npm run build
+Start command: npx prisma migrate deploy && npm run start
+Health check: /health
+```
+
+Required env vars:
+
+- `DATABASE_URL`
+- `DIRECT_URL`
+- `WECOM_WEBHOOK_URL`
+- `PUBLIC_BASE_URL`
+- `NODE_ENV=production`
+- `PORT=10000`
+
+## Railway
+
+Use the same Neon variables and commands:
+
+```bash
+npm install && npx prisma generate && npm run build
+npx prisma migrate deploy && npm run start
+```
 
 ## Fly.io
 
 Use the included `Dockerfile`. Set secrets with:
 
 ```bash
-fly secrets set DATABASE_URL="..." WECOM_WEBHOOK_URL="..." PUBLIC_BASE_URL="..."
+fly secrets set DATABASE_URL="..." DIRECT_URL="..." WECOM_WEBHOOK_URL="..." PUBLIC_BASE_URL="..."
 ```
 
 Run `npx prisma migrate deploy` as a release command or one-off machine command.
 
-## Vercel or Cloudflare Workers
-
-This Fastify server is easiest on Render/Railway/Fly. For Vercel or Workers, keep the service logic and adapt the HTTP entrypoint to the platform runtime. Also use a hosted PostgreSQL database because local SQLite is not durable on serverless filesystems.
-
 ## Voice Platform URLs
 
-Vapi server/tool URLs:
-
 ```text
 PUBLIC_BASE_URL/tools/submit-visitor
+PUBLIC_BASE_URL/tools/validate-phone
 PUBLIC_BASE_URL/tools/lookup-returning-visitor
-```
-
-Retell custom function endpoints:
-
-```text
-PUBLIC_BASE_URL/tools/submit-visitor
-PUBLIC_BASE_URL/tools/lookup-returning-visitor
-```
-
-Inbound call events webhook:
-
-```text
 PUBLIC_BASE_URL/webhooks/call-events
+```
+
+After deployment, run:
+
+```powershell
+$env:PUBLIC_BASE_URL="https://your-render-service.onrender.com"
+npm.cmd run vapi:revert-phone-flow
 ```
 
 ## WeCom Group Robot

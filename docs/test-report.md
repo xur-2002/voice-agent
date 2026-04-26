@@ -2,7 +2,7 @@
 
 ## What Worked
 
-- Normal visitor submission succeeds end to end: voice agent → backend → SQLite → WeCom notification.
+- Normal visitor submission succeeds end to end: voice agent → backend → database → WeCom notification.
 - WeCom message includes approve/reject links when `PUBLIC_BASE_URL` is set.
 - Approve link updates the visitor status to `approved` and shows `已确认放行`.
 - Reject link updates the visitor status to `rejected`.
@@ -66,3 +66,4 @@ The happy path should complete within about 25 seconds:
 - Gate opening is mocked; production should replace `src/services/gate-control.ts`.
 - Quick Tunnel URLs are temporary; run the Vapi revert/update script after every tunnel change.
 - Debug pages should be protected before a public deployment.
+- The cloud branch uses Neon PostgreSQL; SQLite is retained only for isolated test runs.
