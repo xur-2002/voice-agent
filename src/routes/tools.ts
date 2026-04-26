@@ -4,7 +4,12 @@ import { z } from "zod";
 import { parseDirectLookupPayload, parseDirectSubmitVisitorPayload } from "../adapters/direct.js";
 import { parseRetellLookupPayload, parseRetellSubmitVisitorPayload } from "../adapters/retell.js";
 import { parseVapiLookupPayload, parseVapiSubmitVisitorPayload } from "../adapters/vapi.js";
-import { lookupReturningVisitor, submitVisitor, validatePhoneForVoice } from "../services/visitorService.js";
+import {
+  lookupReturningVisitor,
+  resolveContactPhoneForVoice,
+  submitVisitor,
+  validatePhoneForVoice
+} from "../services/visitorService.js";
 
 interface ToolRouteDeps {
   prisma: PrismaClient;
@@ -23,6 +28,12 @@ const phoneDigitsSchema = z.object({
   source: z.string().optional()
 });
 
+const resolveContactPhoneSchema = z.object({
+  phone: z.string().optional(),
+  caller_number: z.string().optional(),
+  confirmed_use_caller_number: z.boolean().optional().default(false)
+});
+
 export function registerToolRoutes(app: FastifyInstance, deps: ToolRouteDeps) {
   app.post("/tools/submit-visitor", async (request, reply) => {
     const vapi = parseVapiSubmitVisitorPayload(request.body);
@@ -30,8 +41,8 @@ export function registerToolRoutes(app: FastifyInstance, deps: ToolRouteDeps) {
       const results = [];
       for (const call of vapi.calls) {
         const response = await submitVisitor(call.input, {
-        prisma: deps.prisma,
-        logger: request.log,
+          prisma: deps.prisma,
+          logger: request.log,
           wecomWebhookUrl: deps.wecomWebhookUrl,
           publicBaseUrl: deps.publicBaseUrl
         });
@@ -115,5 +126,18 @@ export function registerToolRoutes(app: FastifyInstance, deps: ToolRouteDeps) {
       "phone digits tool called"
     );
     return reply.send(validatePhoneForVoice(parsed.data.digits));
+  });
+
+  app.post("/tools/resolve-contact-phone", async (request, reply) => {
+    const parsed = resolveContactPhoneSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        ok: true,
+        needs_phone: true,
+        message: "请让用户一位一位说一下联系电话。"
+      });
+    }
+
+    return reply.send(resolveContactPhoneForVoice(parsed.data));
   });
 }

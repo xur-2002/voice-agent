@@ -257,6 +257,52 @@ export function validatePhoneForVoice(input: string) {
   };
 }
 
+export interface ResolveContactPhoneInput {
+  phone?: string;
+  caller_number?: string;
+  confirmed_use_caller_number?: boolean;
+}
+
+export function resolveContactPhoneForVoice(input: ResolveContactPhoneInput) {
+  const explicitPhone = normalizeUsablePhone(input.phone);
+  const callerNumber = normalizeUsablePhone(input.caller_number);
+
+  if (input.confirmed_use_caller_number && callerNumber) {
+    return {
+      ok: true as const,
+      normalized_phone: callerNumber,
+      source: "caller_number" as const,
+      message: `已使用来电号码 ${callerNumber} 作为联系电话。`
+    };
+  }
+
+  if (explicitPhone) {
+    return {
+      ok: true as const,
+      normalized_phone: explicitPhone,
+      source: "phone" as const,
+      message: `手机号已识别为 ${explicitPhone}，请向用户确认。`
+    };
+  }
+
+  if (callerNumber && !input.phone?.trim()) {
+    const last4 = callerNumber.slice(-4);
+    return {
+      ok: true as const,
+      needs_confirmation: true as const,
+      candidate_phone: callerNumber,
+      last4,
+      message: `我看到您的来电号码尾号 ${last4}，可以作为联系电话吗？`
+    };
+  }
+
+  return {
+    ok: true as const,
+    needs_phone: true as const,
+    message: "请让用户一位一位说一下联系电话。"
+  };
+}
+
 async function normalizeAndValidate(
   input: SubmitVisitorInput,
   prisma: PrismaClient
@@ -264,7 +310,13 @@ async function normalizeAndValidate(
   | { ok: true; input: NormalizedSubmitVisitorInput }
   | { ok: false; result: SubmitVisitorInvalid | SubmitVisitorNeedsConfirmation }
 > {
-  const missingFields = requiredFields.filter((field) => !input[field]?.trim());
+  const callerNumber = normalizeUsablePhone(input.caller_number);
+  const explicitPhone = normalizeUsablePhone(input.phone);
+  const contactPhone = explicitPhone ?? callerNumber;
+  const missingFields = requiredFields.filter((field) => {
+    if (field === "phone" && contactPhone) return false;
+    return !input[field]?.trim();
+  });
   if (missingFields.length > 0) {
     return {
       ok: false,
@@ -278,7 +330,7 @@ async function normalizeAndValidate(
   }
 
   const plateNumber = normalizePlateNumber(input.plate_number ?? "");
-  const phone = normalizePhone(input.phone ?? "");
+  const phone = contactPhone ?? normalizePhone(input.phone ?? "");
   const targetCompany = await normalizeCompany(input.target_company ?? "", prisma);
   const visitReason = normalizeVisitReason(input.visit_reason ?? "");
 
@@ -322,7 +374,7 @@ async function normalizeAndValidate(
       targetCompany,
       phone,
       visitReason,
-      callerNumber: normalizeOptionalPhone(input.caller_number),
+      callerNumber,
       callId: input.call_id?.trim() || undefined,
       rawSummary: input.raw_summary?.trim() || undefined
     }
@@ -330,6 +382,11 @@ async function normalizeAndValidate(
 }
 
 const requiredFields: SubmitField[] = ["plate_number", "target_company", "phone", "visit_reason"];
+
+function normalizeUsablePhone(input?: string) {
+  if (!input?.trim()) return undefined;
+  return isValidPhone(input) ? normalizePhone(input) : undefined;
+}
 
 async function updateVisitorProfile(visitor: VisitorLog, prisma: PrismaClient) {
   const profile = await prisma.visitorProfile.findFirst({

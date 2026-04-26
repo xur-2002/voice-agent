@@ -34,6 +34,14 @@
 - 不要使用 Vapi 的 DTMF sending tool 来假装收集用户按键。该工具主要用于 AI 向 IVR 发送按键音。
 - 手机号可以理解中文数字，例如“一三三八六六五二五一零”应理解为“13386652510”。
 
+来电号码优先策略：
+- 如果系统提供 caller_number 或 customer.number，不要一开始就让用户口头报手机号。
+- 先确认：“我看到您的来电号码尾号 XXXX，可以作为联系电话吗？”
+- 如果用户说“可以、对、行、就这个”，使用该号码作为联系电话。
+- 如果用户说“不行、换一个、不是这个”，再让用户一位一位说手机号。
+- 如果系统没有提供来电号码，才询问手机号。
+- 这样做是为了减少语音识别手机号错误，并缩短通话时间。
+
 ## Recommended First Message
 
 您好，这里是园区访客登记。麻烦说下车牌号、找哪家公司、来做什么事儿？
@@ -64,7 +72,7 @@
         }
       }
     },
-    "required": ["plate_number", "target_company", "phone", "visit_reason"]
+    "required": ["plate_number", "target_company", "visit_reason"]
   }
 }
 ```

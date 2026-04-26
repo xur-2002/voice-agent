@@ -45,6 +45,15 @@ const SYSTEM_PROMPT = `你是工业园区停车场入口的真人门卫式语音
 - 不要使用 Vapi 的 DTMF sending tool 来假装收集用户按键。该工具主要用于 AI 向 IVR 发送按键音。
 - 手机号可以理解中文数字，例如“一三三八六六五二五一零”应理解为“13386652510”。
 
+来电号码优先策略：
+- 如果系统提供 caller_number 或 customer.number，不要一开始就让用户口头报手机号。
+- 先确认：“我看到您的来电号码尾号 XXXX，可以作为联系电话吗？”
+- 如果用户说“可以、对、行、就这个”，使用该号码作为联系电话。
+- 如果用户说“不行、换一个、不是这个”，再让用户一位一位说手机号。
+- 如果系统没有提供来电号码，才询问手机号。
+- submitVisitor 工具的 caller_number 字段应由 Vapi 的 {{ customer.number }} 动态变量传入。
+- 这样做是为了减少语音识别手机号错误，并缩短通话时间。
+
 对话目标：
 普通访客最多3轮完成。
 从电话接通到提交登记应尽量控制在25秒以内。
@@ -85,6 +94,8 @@ async function main() {
   console.log(`Public submitVisitor URL: ${submitVisitorUrl}`);
   console.log(`Public validatePhone URL: ${validatePhoneUrl}`);
   console.log(`Call events webhook URL: ${callEventsUrl}`);
+  console.log("Reminder: In Vapi Dashboard → Tools → submitVisitor → Request Body / Static Parameters, add caller_number = {{ customer.number }}");
+  console.log("Reminder: Make the submitVisitor phone body field optional when caller_number is passed.");
 
   await warnIfToolLookupFails(toolId);
 
@@ -376,6 +387,8 @@ function printResult(result) {
   console.log(`Public validatePhone URL: ${validatePhoneUrl}`);
   console.log(`Call events webhook URL: ${callEventsUrl}`);
   console.log(`Creation path: ${result.creationPath}`);
+  console.log("Caller number mapping: add caller_number = {{ customer.number }} to the existing submitVisitor tool request body.");
+  console.log("Caller-number-first setup: keep phone optional in the submitVisitor tool schema, with caller_number mapped from customer.number.");
   console.log("");
   console.log("Response summary:");
   console.log(
