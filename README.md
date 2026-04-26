@@ -1,64 +1,51 @@
-# AI Voice Visitor Registration MVP
+# AI Voice Visitor Registration
 
-Production-oriented MVP for an industrial park voice visitor registration flow. A Vapi or Retell voice agent collects visitor details in Chinese, calls this backend tool API, the backend validates and stores the record, then pushes a WeCom group robot markdown notification.
+Production-style MVP for an industrial park entrance: a Chinese voice agent collects visitor vehicle info, calls a backend tool API, stores the record, and sends a WeCom group robot message for the guard.
 
 ```mermaid
 flowchart LR
   A[Visitor calls phone number] --> B[Vapi or Retell Voice Agent]
   B --> C[Backend Tool API]
-  C --> D[(SQLite/PostgreSQL)]
+  C --> D[(SQLite local / PostgreSQL prod)]
   C --> E[WeCom Group Robot]
-  E --> F[Guard receives message]
+  E --> F[Guard approves or rejects]
   G[Guard Query Page] --> C
 ```
 
-## Features
+## Demo Flow
 
-- Fastify + TypeScript + Prisma + Zod-style validation helpers
-- Direct JSON, Vapi tool-call, and Retell custom-function adapters
-- Visitor submission with normalization, confidence checks, idempotency by `call_id`, and timing logs
-- WeCom markdown notification with 5s timeout, 2 attempts, and local mock-sent mode
-- Returning visitor lookup from the last 30 days
-- Minimal `/guard` page and deterministic `/guard/query` Chinese analytics parser
-- SQLite local development with a documented PostgreSQL upgrade path
+```text
+AI: 您好，这里是园区访客登记。麻烦说下车牌号、找哪家公司、来做什么事儿？
+User: 沪，A，一二三四五，来蓝色鲸鱼送货。
+AI: 收到，手机号麻烦一位一位说一下。
+User: 一三三，八六六，五二五，一零。
+AI: 我确认一下，手机号是 13386652510，对吗？
+User: 对。
+AI: 好的，已通知门卫，请稍等放行。
+```
+
+The final demo uses explicit digit-by-digit phone collection for reliability. The backend still supports `caller_number` fallback, but it is not the default demo path.
 
 ## Quick Start
 
-```bash
-npm install
-cp .env.example .env
-npx prisma generate
-npx prisma migrate dev
-npm run seed
-npm run dev
+```powershell
+npm.cmd install
+copy .env.example .env
+npx.cmd prisma generate
+npx.cmd prisma migrate dev
+npm.cmd run seed
+npm.cmd run dev
 ```
 
-Check the service:
+Check health:
 
-```bash
-curl http://localhost:3000/health
+```powershell
+curl.exe http://127.0.0.1:3000/health
 ```
-
-Submit a visitor:
-
-```bash
-curl -X POST http://localhost:3000/tools/submit-visitor \
-  -H "Content-Type: application/json" \
-  -d '{
-    "plate_number":"沪A12345",
-    "target_company":"蓝色鲸鱼",
-    "phone":"13812341234",
-    "visit_reason":"送货",
-    "caller_number":"+13145550000",
-    "call_id":"demo-call-001"
-  }'
-```
-
-Repeat the same `call_id` to verify idempotency. Open `http://localhost:3000/guard` for the guard query page.
 
 ## Environment
 
-```bash
+```text
 PORT=3000
 DATABASE_URL="file:./dev.db"
 WECOM_WEBHOOK_URL=""
@@ -68,55 +55,67 @@ WEBHOOK_SECRET=""
 NODE_ENV="development"
 ```
 
-`WECOM_WEBHOOK_URL` is optional locally. If it is empty, submissions still succeed with `status: "mock-sent"`.
+Never commit `.env`, Vapi keys, WeCom webhooks, phone numbers, or production database credentials.
 
-## API
+## Main Endpoints
 
 - `GET /health`
 - `POST /tools/submit-visitor`
+- `POST /tools/validate-phone`
 - `POST /tools/lookup-returning-visitor`
 - `POST /webhooks/call-events`
-- `GET /visitors?limit=20&plate_number=&phone=&target_company=&from=&to=`
+- `GET /visitors`
 - `GET /guard`
 - `POST /guard/query`
+- `GET /guard/visitors/:id/approve?token=...`
+- `GET /guard/visitors/:id/reject?token=...`
 
-## Voice Agent Setup
+## Vapi Setup
 
-Use `docs/voice-agent-prompt.md` for the Chinese system prompt, first message, tool schemas, and examples.
+Use [docs/voice-agent-prompt.md](docs/voice-agent-prompt.md) for the prompt and schemas.
 
-Vapi tool URLs:
+When the tunnel URL changes:
 
-- `${PUBLIC_BASE_URL}/tools/submit-visitor`
-- `${PUBLIC_BASE_URL}/tools/lookup-returning-visitor`
+```powershell
+$env:VAPI_API_KEY="paste_private_key_here"
+$env:VAPI_TOOL_ID="f478648e-5537-4b11-a5f5-6330b45c8017"
+$env:VAPI_ASSISTANT_ID="7835273d-ce47-4cb4-b7e9-ad43057b0183"
+$env:PUBLIC_BASE_URL="https://your-current-tunnel.trycloudflare.com"
+npm.cmd run vapi:revert-phone-flow
+```
 
-Retell custom function endpoints:
-
-- `${PUBLIC_BASE_URL}/tools/submit-visitor`
-- `${PUBLIC_BASE_URL}/tools/lookup-returning-visitor`
-
-Call events webhook:
-
-- `${PUBLIC_BASE_URL}/webhooks/call-events`
+This sets the `submitVisitor` tool URL, keeps `phone` required, and updates the assistant webhook to `/webhooks/call-events`.
 
 ## WeCom Setup
 
-Create an Enterprise WeChat group robot and set `WECOM_WEBHOOK_URL` in the runtime environment. The app never logs the full webhook URL. Notification content is markdown and includes plate, company, phone, reason, entry time, and pending confirmation status.
+Create an Enterprise WeChat group robot and set `WECOM_WEBHOOK_URL` only in local or deployment environment variables. If it is missing locally, the backend mock-sends successfully.
 
-## Testing
+WeCom messages include:
 
-```bash
-npm run test
-npm run build
+- plate number, company, phone, reason, entry time
+- approve/reject links when `PUBLIC_BASE_URL` is set
+- approval page updates status to `approved`
+- rejection page updates status to `rejected`
+
+Gate control is currently mocked in `src/services/gate-control.ts`; production can replace it with a Hikvision gate or barrier controller API.
+
+## Bonus Features
+
+- Returning visitor lookup by `phone`, `plate_number`, or `caller_number`
+- Guard analytics page at `/guard`
+- Deterministic Chinese query parser for today/week/month counts, company counts, phone/plate visit counts, and busiest hour
+- Idempotency by `call_id` to avoid duplicate WeCom pushes
+- Phone and plate normalization for common Chinese ASR errors
+
+## Test
+
+```powershell
+npm.cmd run test
+npm.cmd run build
 ```
 
-Tests cover normalization, submission in mock WeCom mode, idempotency, returning visitor lookup, and guard query parsing.
+See [docs/test-report.md](docs/test-report.md) for final demo notes and acceptance checklist.
 
-## Known Limitations
+## Production Path
 
-- The MVP uses deterministic Chinese keyword parsing, not an LLM, for `/guard/query`.
-- `schema.prisma` uses SQLite for the acceptance flow. For Neon/PostgreSQL production, switch the datasource provider to `postgresql`, run a production migration, and keep the same app code.
-- There is no auth on debug endpoints yet. Add auth or network controls before exposing `/visitors` and `/guard` publicly.
-
-## Production Upgrade Path
-
-Add webhook signature verification, admin auth, richer observability, production PostgreSQL migrations, rate limits, and a small admin UI for company aliases. See `docs/deployment.md` for Render/Railway/Fly/Vercel notes.
+Move from SQLite to PostgreSQL, add auth around `/guard` and `/visitors`, add webhook signatures, persist Cloudflare/Vapi URLs in deployment config, add observability and rate limits, and replace mock gate control with the real parking barrier integration.

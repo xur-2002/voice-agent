@@ -71,6 +71,32 @@ describe("submit visitor flow", () => {
     expect(await prisma.visitorLog.count({ where: { callId: "test-call-idempotent" } })).toBe(1);
   });
 
+  it("creates separate records for different callIds", async () => {
+    const basePayload = {
+      plate_number: "沪A12345",
+      target_company: "蓝鲸",
+      phone: "13386652510",
+      visit_reason: "送货"
+    };
+
+    const first = await app.inject({
+      method: "POST",
+      url: "/tools/submit-visitor",
+      payload: { ...basePayload, call_id: "multi-call-001" }
+    });
+    const second = await app.inject({
+      method: "POST",
+      url: "/tools/submit-visitor",
+      payload: { ...basePayload, call_id: "multi-call-002" }
+    });
+
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
+    expect(first.json().ok).toBe(true);
+    expect(second.json().ok).toBe(true);
+    expect(await prisma.visitorLog.count({ where: { callId: { in: ["multi-call-001", "multi-call-002"] } } })).toBe(2);
+  });
+
   it("returns confirmation request for low-confidence plate", async () => {
     const response = await app.inject({
       method: "POST",

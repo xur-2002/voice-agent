@@ -19,7 +19,8 @@
     "seed": "tsx prisma/seed.ts",
     "vapi:list-tools": "node scripts/list-vapi-tools.mjs",
     "vapi:create-assistant": "node scripts/create-vapi-assistant.mjs",
-    "vapi:update-caller-number": "node scripts/update-vapi-caller-number.mjs"
+    "vapi:update-caller-number": "node scripts/update-vapi-caller-number.mjs",
+    "vapi:revert-phone-flow": "node scripts/revert-vapi-phone-flow.mjs"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
