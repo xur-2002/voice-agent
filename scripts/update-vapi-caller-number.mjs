@@ -157,106 +157,63 @@ async function updateAssistant() {
 
 function buildToolPatchAttempts(tool) {
   const schema = submitVisitorParametersSchema();
-  const bodyFields = {
-    plate_number: "{{ plate_number }}",
-    target_company: "{{ target_company }}",
-    visit_reason: "{{ visit_reason }}",
-    phone: "{{ phone }}",
-    caller_number: "{{ customer.number }}",
-    raw_summary: "{{ raw_summary }}"
-  };
 
   const patchedClone = stripReadOnlyFields(structuredClone(tool ?? {}));
-  applyToolShapePatch(patchedClone, schema, bodyFields);
+  applyToolShapePatch(patchedClone, schema);
 
   return [
+    {
+      label: "apiRequest schema fields",
+      payload: {
+        url: submitVisitorUrl,
+        method: "POST",
+        headers: ensureContentTypeHeader(tool?.headers),
+        body: schema,
+        function: {
+          ...(isRecord(tool?.function) ? tool.function : {}),
+          name: getToolFunctionName(tool) || "api_request_tool",
+          description:
+            tool?.function?.description ||
+            "提交访客登记信息。caller_number 由 Vapi 的 {{ customer.number }} 自动传入时，可作为默认联系电话。"
+        }
+      }
+    },
     {
       label: "patched existing fetched shape",
       payload: patchedClone
     },
     {
-      label: "apiRequest flat fields",
+      label: "body schema only",
       payload: {
-        type: tool?.type ?? "apiRequest",
-        name: getToolName(tool) || "submitVisitor",
         url: submitVisitorUrl,
         method: "POST",
         headers: ensureContentTypeHeader(tool?.headers),
-        body: bodyFields,
-        function: {
-          ...(isRecord(tool?.function) ? tool.function : {}),
-          name: "submitVisitor",
-          parameters: schema
-        }
-      }
-    },
-    {
-      label: "apiRequest nested request fields",
-      payload: {
-        type: tool?.type ?? "apiRequest",
-        name: getToolName(tool) || "submitVisitor",
-        apiRequest: {
-          ...(isRecord(tool?.apiRequest) ? tool.apiRequest : {}),
-          url: submitVisitorUrl,
-          method: "POST",
-          headers: ensureContentTypeHeader(tool?.apiRequest?.headers),
-          body: bodyFields
-        },
-        function: {
-          ...(isRecord(tool?.function) ? tool.function : {}),
-          name: "submitVisitor",
-          parameters: schema
-        }
+        body: schema
       }
     }
   ];
 }
 
-function applyToolShapePatch(target, schema, bodyFields) {
+function applyToolShapePatch(target, schema) {
   target.url = submitVisitorUrl;
   target.method = "POST";
   target.headers = ensureContentTypeHeader(target.headers);
 
   if (isRecord(target.function)) {
-    target.function.name = target.function.name || "submitVisitor";
-    target.function.parameters = schema;
+    target.function.name = target.function.name || "api_request_tool";
+    delete target.function.parameters;
   } else {
-    target.function = { name: "submitVisitor", parameters: schema };
+    target.function = { name: "api_request_tool" };
   }
 
   if (isRecord(target.apiRequest)) {
     target.apiRequest.url = submitVisitorUrl;
     target.apiRequest.method = "POST";
     target.apiRequest.headers = ensureContentTypeHeader(target.apiRequest.headers);
-    target.apiRequest.body = patchRequestBody(target.apiRequest.body, bodyFields);
+    target.apiRequest.body = schema;
   }
 
-  target.body = patchRequestBody(target.body, bodyFields);
-  target.bodyType = target.bodyType || "json";
-}
-
-function patchRequestBody(existing, bodyFields) {
-  if (Array.isArray(existing)) {
-    const byKey = new Map(existing.map((item) => [String(item?.key ?? item?.name ?? ""), item]).filter(([key]) => key));
-    for (const [key, value] of Object.entries(bodyFields)) {
-      const previous = byKey.get(key);
-      byKey.set(key, {
-        ...(isRecord(previous) ? previous : {}),
-        key,
-        name: previous?.name ?? key,
-        value,
-        type: previous?.type ?? "string",
-        required: ["plate_number", "target_company", "visit_reason"].includes(key)
-      });
-    }
-    return [...byKey.values()];
-  }
-
-  if (isRecord(existing)) {
-    return { ...existing, ...bodyFields };
-  }
-
-  return bodyFields;
+  target.body = schema;
 }
 
 function submitVisitorParametersSchema() {
@@ -266,9 +223,13 @@ function submitVisitorParametersSchema() {
       plate_number: { type: "string", description: "访客车牌号，例如 沪A12345" },
       target_company: { type: "string", description: "来访单位，例如 蓝色鲸鱼科技" },
       visit_reason: { type: "string", description: "来访事由，例如 送货、拜访、面试、维修、其他" },
-      phone: { type: "string", description: "访客确认的联系电话，可选；若缺失则后端可使用 caller_number" },
-      caller_number: { type: "string", description: "来电号码，Vapi 静态参数填写 {{ customer.number }}" },
-      raw_summary: { type: "string", description: "简短通话摘要，可选" }
+      phone: { type: "string", description: "访客确认的联系电话，可选；若缺失则后端可使用 caller_number", default: "" },
+      caller_number: {
+        type: "string",
+        description: "来电号码，Vapi 静态参数填写 {{ customer.number }}",
+        default: "{{ customer.number }}"
+      },
+      raw_summary: { type: "string", description: "简短通话摘要，可选", default: "" }
     },
     required: ["plate_number", "target_company", "visit_reason"]
   };
@@ -284,6 +245,15 @@ function ensureContentTypeHeader(existing) {
   }
 
   if (isRecord(existing)) {
+    if (existing.type === "object" && isRecord(existing.properties)) {
+      return {
+        ...existing,
+        properties: {
+          ...existing.properties,
+          "Content-Type": { type: "string", value: "application/json" }
+        }
+      };
+    }
     return { ...existing, "Content-Type": existing["Content-Type"] ?? existing["content-type"] ?? "application/json" };
   }
 
@@ -296,6 +266,8 @@ function stripReadOnlyFields(value) {
     "id",
     "orgId",
     "assistantId",
+    "type",
+    "bodyType",
     "createdAt",
     "updatedAt",
     "deletedAt",
@@ -380,6 +352,10 @@ function getToolName(tool) {
   return tool?.name ?? tool?.function?.name ?? tool?.function?.parameters?.title ?? "";
 }
 
+function getToolFunctionName(tool) {
+  return tool?.function?.name ?? "";
+}
+
 function readSystemPrompt(assistant) {
   const messages = assistant?.model?.messages;
   if (!Array.isArray(messages)) return "";
@@ -422,8 +398,8 @@ function toolHasCallerNumber(tool) {
 }
 
 function toolHasOptionalPhone(tool) {
-  const json = JSON.stringify(tool);
-  return json.includes("phone") && json.includes('"required":["plate_number","target_company","visit_reason"]');
+  const required = tool?.body?.required;
+  return Array.isArray(required) && required.includes("plate_number") && required.includes("target_company") && required.includes("visit_reason") && !required.includes("phone");
 }
 
 function isRecord(value) {
