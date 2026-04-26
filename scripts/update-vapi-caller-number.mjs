@@ -19,6 +19,7 @@ const toolId = process.env.VAPI_TOOL_ID || DEFAULT_TOOL_ID;
 const assistantId = process.env.VAPI_ASSISTANT_ID || DEFAULT_ASSISTANT_ID;
 const publicBaseUrl = stripTrailingSlash(process.env.PUBLIC_BASE_URL || DEFAULT_PUBLIC_BASE_URL);
 const submitVisitorUrl = `${publicBaseUrl}/tools/submit-visitor`;
+const callEventsUrl = `${publicBaseUrl}/webhooks/call-events`;
 
 if (!apiKey) {
   console.error("Missing VAPI_API_KEY.");
@@ -36,6 +37,7 @@ async function main() {
   console.log(`Tool ID: ${toolId}`);
   console.log(`Assistant ID: ${assistantId}`);
   console.log(`submitVisitor URL: ${submitVisitorUrl}`);
+  console.log(`call events URL: ${callEventsUrl}`);
   console.log("");
 
   const toolResult = await updateSubmitVisitorTool();
@@ -47,6 +49,7 @@ async function main() {
   console.log(`caller_number configured: ${toolResult.callerNumberConfigured ? "yes" : "unknown/manual check needed"}`);
   console.log(`phone optional: ${toolResult.phoneOptional ? "yes" : "unknown/manual check needed"}`);
   console.log(`Assistant prompt updated: ${assistantResult.promptUpdated ? "yes" : "no"}`);
+  console.log(`Assistant webhook updated: ${assistantResult.webhookUpdated ? "yes" : "no/manual check needed"}`);
   console.log(`Tool ID attached to assistant: ${assistantResult.toolAttached ? "yes" : "no/manual check needed"}`);
   if (toolResult.manualNeeded || assistantResult.manualNeeded) {
     printManualInstructions();
@@ -109,9 +112,22 @@ async function updateAssistant() {
 
   const attempts = [
     {
-      label: "minimal firstMessage + model.messages + model.toolIds",
+      label: "firstMessage + model.messages + model.toolIds + server.url",
       payload: {
         firstMessage: FIRST_MESSAGE,
+        server: { url: callEventsUrl },
+        model: {
+          ...pickModelPatchBase(assistant?.model),
+          toolIds,
+          messages: [{ role: "system", content: nextPrompt }]
+        }
+      }
+    },
+    {
+      label: "firstMessage + model.messages + model.toolIds + serverUrl",
+      payload: {
+        firstMessage: FIRST_MESSAGE,
+        serverUrl: callEventsUrl,
         model: {
           ...pickModelPatchBase(assistant?.model),
           toolIds,
@@ -139,8 +155,9 @@ async function updateAssistant() {
       console.log(`Assistant PATCH accepted: ${attempt.label}`);
       return {
         promptUpdated: Boolean(updatedPrompt?.includes("来电号码优先策略")),
+        webhookUpdated: assistantHasWebhook(updated),
         toolAttached: modelHasToolId(updated?.model, toolId),
-        manualNeeded: !modelHasToolId(updated?.model, toolId)
+        manualNeeded: !modelHasToolId(updated?.model, toolId) || !assistantHasWebhook(updated)
       };
     } catch (error) {
       logRecoverableError(`Assistant PATCH failed: ${attempt.label}`, error);
@@ -150,6 +167,7 @@ async function updateAssistant() {
   console.warn("Could not update the assistant prompt through the API with known payload shapes.");
   return {
     promptUpdated: false,
+    webhookUpdated: assistantHasWebhook(assistant),
     toolAttached: modelHasToolId(assistant?.model, toolId),
     manualNeeded: true
   };
@@ -344,6 +362,7 @@ function printManualInstructions() {
   console.log("");
   console.log("Vapi Dashboard → Assistants → 工业园区访客登记助手 → Model/System Prompt:");
   console.log("- Paste the 来电号码优先策略 block");
+  console.log(`- Set server/webhook URL to ${callEventsUrl}`);
   console.log("- Confirm submitVisitor is still attached");
   console.log("- Publish");
 }
@@ -391,6 +410,10 @@ function modelHasToolId(model, id) {
   if (Array.isArray(model?.toolIds) && model.toolIds.includes(id)) return true;
   if (Array.isArray(model?.tools) && model.tools.some((tool) => tool?.id === id || tool?.toolId === id)) return true;
   return false;
+}
+
+function assistantHasWebhook(assistant) {
+  return assistant?.server?.url === callEventsUrl || assistant?.serverUrl === callEventsUrl;
 }
 
 function toolHasCallerNumber(tool) {

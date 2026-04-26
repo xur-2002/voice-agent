@@ -109,6 +109,21 @@ $env:VALIDATE_PHONE_TOOL_ID="paste_validate_phone_tool_id_here"
 
 The prompt asks the assistant to call `validatePhone`, repeat the normalized 11-digit phone number, and call `submitVisitor` only after the user confirms.
 
+## Update Existing Assistant URL
+
+When a Cloudflare Quick Tunnel URL changes, set `PUBLIC_BASE_URL` to the new URL and run:
+
+```powershell
+npm.cmd run vapi:update-caller-number
+```
+
+The updater patches:
+
+- `submitVisitor` URL to `PUBLIC_BASE_URL + "/tools/submit-visitor"`
+- Assistant server/webhook URL to `PUBLIC_BASE_URL + "/webhooks/call-events"`
+- `caller_number = {{ customer.number }}`
+- `phone` optional, with only `plate_number`, `target_company`, and `visit_reason` required
+
 ## Optional DTMF-Ready Endpoint
 
 The backend also exposes:
