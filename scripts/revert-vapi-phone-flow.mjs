@@ -24,15 +24,17 @@ const SYSTEM_PROMPT = `你是工业园区停车场入口的真人门卫式语音
 手机号采集规则：
 - 这版稳定演示必须显式采集手机号。
 - 询问手机号时，说：“收到，手机号麻烦一位一位说一下。”
-- 用户说手机号后，先确认格式。如果识别到 11 位手机号，慢速复述：“我确认一下，手机号是 13386652510，对吗？”
-- 用户确认“对、是、可以、没错”之后，立即调用 submitVisitor。
-- 如果用户说“不对、错了、不是”，只重新询问手机号。
-- 如果手机号不是明确的 11 位数字，只追问手机号，不要重新问车牌、公司、事由。
+- 用户说完手机号后，如果可以解析出 11 位中国大陆手机号，立即调用 submitVisitor。
+- 不要复述手机号。
+- 不要问“手机号是 xxx 对吗？”。
+- 不要等待用户回答“对”。
+- 只有在手机号缺失、明显不是 11 位、或无法解析时，才只追问手机号，不要重新问车牌、公司、事由。
 - 手机号可以理解中文数字，例如“一三三八六六五二五一零”应理解为“13386652510”。
+- 如果手机号听起来是分组中文数字，例如“一三三，八六六，五二五，一零”，应将其作为 13386652510 提交。
 
 工具使用规则：
 - 当已经获得 plate_number、target_company、phone、visit_reason 四个字段后，立即调用 submitVisitor。
-- phone 必须来自用户明确提供并确认的手机号。
+- phone 必须来自用户明确提供并可解析为 11 位中国大陆手机号的内容。
 - caller_number 可以作为后台备用字段传给工具，但不要作为这次演示的默认联系电话。
 - submitVisitor 工具调用成功后，告诉用户：“好的，已通知门卫，请稍等放行。”
 
@@ -45,8 +47,6 @@ const SYSTEM_PROMPT = `你是工业园区停车场入口的真人门卫式语音
 用户：沪，A，一二三四五，来蓝色鲸鱼送货。
 助手：收到，手机号麻烦一位一位说一下。
 用户：一三三，八六六，五二五，一零。
-助手：我确认一下，手机号是 13386652510，对吗？
-用户：对。
 助手调用 submitVisitor。
 助手：好的，已通知门卫，请稍等放行。`;
 
@@ -199,7 +199,10 @@ async function verify() {
     requiredFieldsStable:
       required.length === requiredFields.length && requiredFields.every((field) => required.includes(field)),
     webhookUpdated: assistant?.server?.url === callEventsUrl || assistant?.serverUrl === callEventsUrl,
-    explicitPromptActive: prompt.includes("手机号麻烦一位一位说一下") && prompt.includes("phone 必须来自用户明确提供"),
+    explicitPromptActive:
+      prompt.includes("手机号麻烦一位一位说一下") &&
+      prompt.includes("不要复述手机号") &&
+      prompt.includes("立即调用 submitVisitor"),
     callerFirstRemoved: !prompt.includes("来电号码优先策略"),
     toolAttached: modelHasToolId(assistant?.model, toolId)
   };
@@ -213,7 +216,7 @@ function submitVisitorSchema() {
       plate_number: { type: "string", description: "访客车牌号，例如 沪A12345", default: "" },
       target_company: { type: "string", description: "来访单位，例如 蓝色鲸鱼科技", default: "" },
       visit_reason: { type: "string", description: "来访事由，例如 送货、拜访、面试、维修、其他", default: "" },
-      phone: { type: "string", description: "访客确认后的手机号，例如 13386652510", default: "" },
+      phone: { type: "string", description: "访客提供的 11 位手机号，例如 13386652510", default: "" },
       caller_number: { type: "string", description: "平台传入的来电号码，可选备用字段", default: "" },
       raw_summary: { type: "string", description: "简短通话摘要，可选", default: "" }
     }

@@ -19,12 +19,10 @@ AI: 您好，这里是园区访客登记。麻烦说下车牌号、找哪家公�
 User: 沪，A，一二三四五，来蓝色鲸鱼送货。
 AI: 收到，手机号麻烦一位一位说一下。
 User: 一三三，八六六，五二五，一零。
-AI: 我确认一下，手机号是 13386652510，对吗？
-User: 对。
 AI: 好的，已通知门卫，请稍等放行。
 ```
 
-The final demo uses explicit digit-by-digit phone collection for reliability. The backend still supports `caller_number` fallback, but it is not the default demo path.
+The final demo uses explicit digit-by-digit phone collection for reliability. Once Vapi can parse an 11-digit phone number, it calls `submitVisitor` immediately; the backend normalizes and validates the phone. The backend still supports `caller_number` fallback, but it is not the default demo path.
 
 ## Quick Start
 

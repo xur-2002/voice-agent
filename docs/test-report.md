@@ -24,8 +24,7 @@
   `收到，手机号麻烦一位一位说一下。`
 - Backend normalizes Chinese spoken digits:
   `一三三，八六六，五二五，一零` → `13386652510`.
-- Assistant must repeat the normalized phone before submit:
-  `我确认一下，手机号是 13386652510，对吗？`
+- Assistant submits immediately once it can parse an 11-digit phone; no phone repeat-confirmation step.
 - Plate normalization repairs common Shanghai plate ASR artifacts.
 - Company aliases map `蓝色金鱼`, `蓝色鲸鱼`, and `蓝鲸` to `蓝色鲸鱼科技`.
 - Vapi can be reset to the stable explicit-phone flow with:
@@ -46,10 +45,8 @@
    `沪，A，一二三四五，来蓝色鲸鱼送货。`
 7. Say phone:
    `一三三，八六六，五二五，一零。`
-8. Confirm:
-   `对。`
-9. Check WeCom notification.
-10. Click approve link and confirm `/guard` shows `approved`.
+8. Check WeCom notification.
+9. Click approve link and confirm `/guard` shows `approved`.
 
 ## Target Timing
 
@@ -57,7 +54,6 @@ The happy path should complete within about 25 seconds:
 
 - first prompt and vehicle/company/reason: 6-8s
 - digit-by-digit phone: 5-8s
-- phone confirmation: 3-5s
 - backend save and WeCom push: normally under 2s locally
 
 ## Known Limitations

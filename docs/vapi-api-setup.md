@@ -42,11 +42,13 @@ Use [voice-agent-prompt.md](voice-agent-prompt.md). The important line is:
 收到，手机号麻烦一位一位说一下。
 ```
 
-The assistant must repeat the normalized phone before calling `submitVisitor`:
+After the user says the phone number, the assistant should submit immediately when it can parse an 11-digit Chinese mobile number:
 
 ```text
-我确认一下，手机号是 13386652510，对吗？
+一三三，八六六，五二五，一零。 → submitVisitor(phone="13386652510")
 ```
+
+Do not repeat the phone number, do not ask `手机号是 xxx 对吗？`, and do not wait for the user to answer `对`.
 
 ## Optional Tools
 
@@ -95,7 +97,5 @@ AI: 您好，这里是园区访客登记。麻烦说下车牌号、找哪家公�
 User: 沪，A，一二三四五，来蓝色鲸鱼送货。
 AI: 收到，手机号麻烦一位一位说一下。
 User: 一三三，八六六，五二五，一零。
-AI: 我确认一下，手机号是 13386652510，对吗？
-User: 对。
 AI: 好的，已通知门卫，请稍等放行。
 ```
