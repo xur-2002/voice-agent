@@ -3,7 +3,7 @@ const DEFAULT_TOOL_ID = "f478648e-5537-4b11-a5f5-6330b45c8017";
 const DEFAULT_ASSISTANT_ID = "7835273d-ce47-4cb4-b7e9-ad43057b0183";
 const DEFAULT_PUBLIC_BASE_URL = "https://footwear-smooth-during-testimony.trycloudflare.com";
 
-const FIRST_MESSAGE = "您好，这里是园区访客登记。麻烦说下车牌号、找哪家公司、来做什么事儿？";
+const FIRST_MESSAGE = "您好，请说车牌、公司、事由。";
 const CALLER_NUMBER_POLICY = `来电号码优先策略：
 - 如果系统提供 caller_number 或 customer.number，不要一开始就让用户口头报手机号。
 - 先确认：“我看到您的来电号码尾号 XXXX，可以作为联系电话吗？”
@@ -12,7 +12,7 @@ const CALLER_NUMBER_POLICY = `来电号码优先策略：
 - 如果系统没有提供来电号码，才询问手机号。
 - 这样做是为了减少语音识别手机号错误，并缩短通话时间。
 - 信息齐全后，立即调用 submitVisitor 工具。
-- 如果 submitVisitor 成功，告诉用户：“好的，已通知门卫，请稍等放行。”`;
+- 如果 submitVisitor 成功，告诉用户：“好的，已通知门卫。”`;
 
 const apiKey = process.env.VAPI_API_KEY;
 const toolId = process.env.VAPI_TOOL_ID || DEFAULT_TOOL_ID;
@@ -56,11 +56,11 @@ async function main() {
   }
   console.log("");
   console.log("Phone call test script:");
-  console.log("AI: 您好，这里是园区访客登记。麻烦说下车牌号、找哪家公司、来做什么事儿？");
+  console.log("AI: 您好，请说车牌、公司、事由。");
   console.log("User: 沪，A，一二三四五，来蓝色鲸鱼送货。");
   console.log("AI: 我看到您的来电号码尾号 XXXX，可以作为联系电话吗？");
   console.log("User: 可以。");
-  console.log("AI: 好的，已通知门卫，请稍等放行。");
+  console.log("AI: 好的，已通知门卫。");
 }
 
 async function updateSubmitVisitorTool() {

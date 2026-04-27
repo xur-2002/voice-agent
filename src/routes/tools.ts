@@ -15,6 +15,8 @@ interface ToolRouteDeps {
   prisma: PrismaClient;
   wecomWebhookUrl?: string;
   publicBaseUrl?: string;
+  wecomTimeoutMs?: number;
+  wecomMaxAttempts?: number;
 }
 
 const validatePhoneSchema = z.object({
@@ -44,7 +46,9 @@ export function registerToolRoutes(app: FastifyInstance, deps: ToolRouteDeps) {
           prisma: deps.prisma,
           logger: request.log,
           wecomWebhookUrl: deps.wecomWebhookUrl,
-          publicBaseUrl: deps.publicBaseUrl
+          publicBaseUrl: deps.publicBaseUrl,
+          wecomTimeoutMs: deps.wecomTimeoutMs,
+          wecomMaxAttempts: deps.wecomMaxAttempts
         });
         results.push({
           toolCallId: call.toolCallId,
@@ -67,7 +71,9 @@ export function registerToolRoutes(app: FastifyInstance, deps: ToolRouteDeps) {
       prisma: deps.prisma,
       logger: request.log,
       wecomWebhookUrl: deps.wecomWebhookUrl,
-      publicBaseUrl: deps.publicBaseUrl
+      publicBaseUrl: deps.publicBaseUrl,
+      wecomTimeoutMs: deps.wecomTimeoutMs,
+      wecomMaxAttempts: deps.wecomMaxAttempts
     });
     return reply.code(response.httpStatus).send(response.result);
   });
@@ -103,7 +109,7 @@ export function registerToolRoutes(app: FastifyInstance, deps: ToolRouteDeps) {
       return reply.code(400).send({
         ok: true,
         valid: false,
-        message: "手机号没有识别清楚，请让用户一位一位重复，或者改用按键输入。"
+        message: "手机号少了几位，请再说一遍。"
       });
     }
 
@@ -117,7 +123,7 @@ export function registerToolRoutes(app: FastifyInstance, deps: ToolRouteDeps) {
       return reply.code(400).send({
         ok: true,
         valid: false,
-        message: "手机号没有识别清楚，请让用户一位一位重复，或者改用按键输入。"
+        message: "手机号少了几位，请再说一遍。"
       });
     }
 

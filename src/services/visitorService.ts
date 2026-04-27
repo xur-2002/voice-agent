@@ -24,12 +24,12 @@ import {
 } from "./normalization.js";
 import { sendVisitorWeComMessage } from "./wecom.js";
 
-const SUCCESS_MESSAGE = "已通知门卫，请稍等放行。";
+const SUCCESS_MESSAGE = "好的，已通知门卫。";
 const VALIDATION_MESSAGES: Record<SubmitField, string> = {
-  plate_number: "车牌号没有听清，请再说一遍车牌号。",
-  target_company: "来访单位没有听清，请再说一遍要找哪家公司。",
-  phone: "手机号没有听清，请再说一遍手机号。",
-  visit_reason: "来访事由没有听清，请再说一遍来做什么事。"
+  plate_number: "车牌没听清，请再说一遍。",
+  target_company: "公司名请再说一遍。",
+  phone: "手机号少了几位，请再说一遍。",
+  visit_reason: "来访事由请再说一遍。"
 };
 
 interface VisitorServiceDeps {
@@ -37,6 +37,8 @@ interface VisitorServiceDeps {
   logger: FastifyBaseLogger;
   wecomWebhookUrl?: string;
   publicBaseUrl?: string;
+  wecomTimeoutMs?: number;
+  wecomMaxAttempts?: number;
 }
 
 export interface SubmitVisitorServiceResponse {
@@ -49,7 +51,16 @@ export async function submitVisitor(
   deps: VisitorServiceDeps
 ): Promise<SubmitVisitorServiceResponse> {
   const requestStartedAt = process.hrtime.bigint();
-  deps.logger.info({ request_received_at: new Date().toISOString(), call_id: input.call_id }, "submit visitor request received");
+  const requestReceivedAt = new Date().toISOString();
+  deps.logger.info(
+    {
+      request_received_at: requestReceivedAt,
+      call_id: input.call_id,
+      phone_masked: maskPhoneForLog(input.phone),
+      caller_number_masked: maskPhoneForLog(input.caller_number)
+    },
+    "submit visitor request received"
+  );
 
   const callId = input.call_id?.trim() || undefined;
   if (callId) {
@@ -76,11 +87,16 @@ export async function submitVisitor(
     }
   }
 
+  const normalizationStartedAt = process.hrtime.bigint();
   const validation = await normalizeAndValidate(input, deps.prisma);
+  const normalizationMs = elapsedMs(normalizationStartedAt);
   if (!validation.ok) {
     deps.logger.info(
       {
+        request_received_at: requestReceivedAt,
+        call_id: callId,
         status: validation.result.status,
+        normalization_ms: normalizationMs.toFixed(1),
         total_ms: elapsedMs(requestStartedAt).toFixed(1)
       },
       "submit visitor validation needs caller follow-up"
@@ -109,9 +125,11 @@ export async function submitVisitor(
   const wecom = await sendVisitorWeComMessage(visitor, {
     webhookUrl: deps.wecomWebhookUrl,
     publicBaseUrl: deps.publicBaseUrl,
+    timeoutMs: deps.wecomTimeoutMs,
+    maxAttempts: deps.wecomMaxAttempts,
     logger: deps.logger
   });
-  const wecomSentMs = elapsedMs(wecomStartedAt);
+  const wecomPushMs = elapsedMs(wecomStartedAt);
 
   if (!wecom.ok) {
     const updated = await deps.prisma.visitorLog.update({
@@ -131,10 +149,15 @@ export async function submitVisitor(
 
     deps.logger.error(
       {
+        request_received_at: requestReceivedAt,
+        call_id: validation.input.callId,
         visitor_id: visitor.id,
-        db_saved_ms: dbSavedMs.toFixed(1),
-        wecom_sent_ms: wecomSentMs.toFixed(1),
+        phone_masked: maskPhoneForLog(visitor.phone),
+        normalization_ms: normalizationMs.toFixed(1),
+        db_write_ms: dbSavedMs.toFixed(1),
+        wecom_push_ms: wecomPushMs.toFixed(1),
         total_ms: elapsedMs(requestStartedAt).toFixed(1),
+        wecom_success: false,
         error: result.error
       },
       "submit visitor completed with WeCom failure"
@@ -161,10 +184,16 @@ export async function submitVisitor(
 
   deps.logger.info(
     {
+      request_received_at: requestReceivedAt,
+      call_id: validation.input.callId,
       visitor_id: visitor.id,
-      db_saved_ms: dbSavedMs.toFixed(1),
-      wecom_sent_ms: wecomSentMs.toFixed(1),
-      total_ms: elapsedMs(requestStartedAt).toFixed(1)
+      phone_masked: maskPhoneForLog(updated.phone),
+      normalization_ms: normalizationMs.toFixed(1),
+      db_write_ms: dbSavedMs.toFixed(1),
+      wecom_push_ms: wecomPushMs.toFixed(1),
+      total_ms: elapsedMs(requestStartedAt).toFixed(1),
+      wecom_success: true,
+      wecom_mock: wecom.mock
     },
     "submit visitor completed"
   );
@@ -246,14 +275,14 @@ export function validatePhoneForVoice(input: string) {
       ok: true as const,
       valid: true as const,
       normalized_phone: normalizedPhone,
-      message: `手机号已识别为 ${normalizedPhone}，请向用户确认。`
+      message: `手机号已识别为 ${normalizedPhone}，可以提交登记。`
     };
   }
 
   return {
     ok: true as const,
     valid: false as const,
-    message: "手机号没有识别清楚，请让用户一位一位重复，或者改用按键输入。"
+    message: VALIDATION_MESSAGES.phone
   };
 }
 
@@ -281,7 +310,7 @@ export function resolveContactPhoneForVoice(input: ResolveContactPhoneInput) {
       ok: true as const,
       normalized_phone: explicitPhone,
       source: "phone" as const,
-      message: `手机号已识别为 ${explicitPhone}，请向用户确认。`
+      message: `手机号已识别为 ${explicitPhone}，可以提交登记。`
     };
   }
 
@@ -324,7 +353,7 @@ async function normalizeAndValidate(
         ok: false,
         status: "missing_or_invalid_fields",
         fields: missingFields,
-        message: `缺少或无效字段：${missingFields.join(", ")}。`
+        message: buildFollowUpMessage(missingFields)
       }
     };
   }
@@ -360,9 +389,7 @@ async function normalizeAndValidate(
         ok: false,
         status: "missing_or_invalid_fields",
         fields: invalidFields,
-        message: invalidFields.includes("phone")
-          ? "手机号没有识别清楚，请让用户一位一位重复，或者改用按键输入。"
-          : `缺少或无效字段：${invalidFields.join(", ")}。`
+        message: buildFollowUpMessage(invalidFields)
       }
     };
   }
@@ -443,4 +470,15 @@ function buildDateWhere(from?: string, to?: string) {
 
 function generateActionToken() {
   return randomBytes(24).toString("base64url");
+}
+
+function buildFollowUpMessage(fields: SubmitField[]) {
+  return VALIDATION_MESSAGES[fields[0] ?? "phone"];
+}
+
+function maskPhoneForLog(input?: string | null) {
+  if (!input) return undefined;
+  const normalized = normalizePhone(input);
+  if (normalized.length <= 7) return "***";
+  return `${normalized.slice(0, 3)}****${normalized.slice(-4)}`;
 }

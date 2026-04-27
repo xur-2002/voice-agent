@@ -30,7 +30,7 @@ The script patches:
 - `Content-Type: application/json`
 - required fields: `plate_number`, `target_company`, `visit_reason`, `phone`
 - optional fields: `caller_number`, `raw_summary`
-- Assistant first message and explicit phone collection prompt
+- Assistant first message and short noisy-call prompt
 - Assistant server/webhook URL to `PUBLIC_BASE_URL + "/webhooks/call-events"`
 - existing `submitVisitor` tool attachment
 
@@ -49,6 +49,15 @@ After the user says the phone number, the assistant should submit immediately wh
 ```
 
 Do not repeat the phone number, do not ask `手机号是 xxx 对吗？`, and do not wait for the user to answer `对`.
+
+Keep all replies short. If noise hides one field, ask only for that field:
+
+```text
+车牌没听清，请再说一遍。
+公司名请再说一遍。
+来访事由请再说一遍。
+手机号少了几位，请再说一遍。
+```
 
 ## Optional Tools
 
@@ -93,9 +102,9 @@ If the API patch is rejected:
 ## Test Call
 
 ```text
-AI: 您好，这里是园区访客登记。麻烦说下车牌号、找哪家公司、来做什么事儿？
+AI: 您好，请说车牌、公司、事由。
 User: 沪，A，一二三四五，来蓝色鲸鱼送货。
 AI: 收到，手机号麻烦一位一位说一下。
 User: 一三三，八六六，五二五，一零。
-AI: 好的，已通知门卫，请稍等放行。
+AI: 好的，已通知门卫。
 ```

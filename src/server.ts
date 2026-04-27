@@ -14,6 +14,8 @@ interface BuildAppOptions {
   logger?: FastifyServerOptions["logger"];
   wecomWebhookUrl?: string;
   publicBaseUrl?: string;
+  wecomTimeoutMs?: number;
+  wecomMaxAttempts?: number;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -38,7 +40,13 @@ export function buildApp(options: BuildAppOptions = {}) {
     time: nowIso()
   }));
 
-  registerToolRoutes(app, { prisma, wecomWebhookUrl, publicBaseUrl });
+  registerToolRoutes(app, {
+    prisma,
+    wecomWebhookUrl,
+    publicBaseUrl,
+    wecomTimeoutMs: options.wecomTimeoutMs,
+    wecomMaxAttempts: options.wecomMaxAttempts
+  });
   registerVisitorRoutes(app, prisma);
   registerGuardRoutes(app, prisma);
   registerCallEventRoutes(app, prisma);

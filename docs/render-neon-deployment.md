@@ -95,10 +95,11 @@ The final demo uses explicit phone collection, so `phone` remains required in th
 Call the Vapi number:
 
 ```text
+AI: 您好，请说车牌、公司、事由。
 User: 沪，A，一二三四五，来蓝色鲸鱼送货。
 AI: 收到，手机号麻烦一位一位说一下。
 User: 一三三，八六六，五二五，一零。
-AI: 好的，已通知门卫，请稍等放行。
+AI: 好的，已通知门卫。
 ```
 
 Confirm:

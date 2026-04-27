@@ -15,14 +15,14 @@ flowchart LR
 ## Demo Flow
 
 ```text
-AI: 您好，这里是园区访客登记。麻烦说下车牌号、找哪家公司、来做什么事儿？
+AI: 您好，请说车牌、公司、事由。
 User: 沪，A，一二三四五，来蓝色鲸鱼送货。
 AI: 收到，手机号麻烦一位一位说一下。
 User: 一三三，八六六，五二五，一零。
-AI: 好的，已通知门卫，请稍等放行。
+AI: 好的，已通知门卫。
 ```
 
-The final demo uses explicit digit-by-digit phone collection for reliability. Once Vapi can parse an 11-digit phone number, it calls `submitVisitor` immediately; the backend normalizes and validates the phone. The backend still supports `caller_number` fallback, but it is not the default demo path.
+The final demo uses short Chinese replies for noisy phone calls and a 25-second target. Once Vapi can parse an 11-digit phone number, it calls `submitVisitor` immediately; the backend normalizes, validates, logs timing, and pushes WeCom with a timeout. The backend still supports `caller_number` fallback, but it is not the default demo path.
 
 ## Quick Start
 
@@ -84,7 +84,7 @@ $env:PUBLIC_BASE_URL="https://your-current-tunnel.trycloudflare.com"
 npm.cmd run vapi:revert-phone-flow
 ```
 
-This sets the `submitVisitor` tool URL, keeps `phone` required, and updates the assistant webhook to `/webhooks/call-events`.
+This sets the `submitVisitor` tool URL, keeps `phone` required, applies the short noisy-call prompt, and updates the assistant webhook to `/webhooks/call-events`.
 
 ## WeCom Setup
 
@@ -105,6 +105,7 @@ Gate control is currently mocked in `src/services/gate-control.ts`; production c
 - Guard analytics page at `/guard`
 - Deterministic Chinese query parser for today/week/month counts, company counts, phone/plate visit counts, and busiest hour
 - Idempotency by `call_id` to avoid duplicate WeCom pushes
+- Structured latency logs for normalization, database writes, WeCom push, and total request time
 - Phone and plate normalization for common Chinese ASR errors
 
 ## Test

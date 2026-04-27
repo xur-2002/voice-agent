@@ -16,6 +16,11 @@ const digitSpeechMap: Record<string, string> = {
   九: "9"
 };
 
+const plateLetterSpeechMap: Record<string, string> = {
+  诶: "A",
+  欸: "A"
+};
+
 const phoneDigitSpeechMap: Record<string, string> = {
   零: "0",
   〇: "0",
@@ -48,7 +53,7 @@ export function normalizePlateNumber(input: string) {
     .replace(/车牌号是?|车牌是?|牌照是?|我的车牌|号码/g, "");
 
   value = Array.from(value)
-    .map((char) => digitSpeechMap[char] ?? char)
+    .map((char) => plateLetterSpeechMap[char] ?? digitSpeechMap[char] ?? char)
     .join("")
     .toUpperCase();
 
@@ -56,6 +61,7 @@ export function normalizePlateNumber(input: string) {
 }
 
 function normalizeShanghaiPlateArtifacts(value: string) {
+  if (/^上海[A-Z]\d{5}$/.test(value)) return value.replace(/^上海/, "沪");
   if (/^互为\d{5}$/.test(value)) return value.replace(/^互为/, "沪A");
   if (/^互为[A-Z]\d{5}$/.test(value)) return value.replace(/^互为/, "沪");
   if (/^[户护沪?][A-Z]\d{5}$/.test(value)) return value.replace(/^[户护沪?]/, "沪");

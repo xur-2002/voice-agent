@@ -1,5 +1,5 @@
 import type { VisitorLog } from "@prisma/client";
-import { formatShanghaiTime } from "../utils/time.js";
+import { elapsedMs, formatShanghaiTime } from "../utils/time.js";
 
 interface LoggerLike {
   warn: (obj: object, msg?: string) => void;
@@ -31,7 +31,7 @@ export async function sendVisitorWeComMessage(visitor: VisitorLog, options: WeCo
     return { ok: true, mock: true, sentAt: new Date() };
   }
 
-  const timeoutMs = options.timeoutMs ?? 5000;
+  const timeoutMs = options.timeoutMs ?? 3000;
   const maxAttempts = options.maxAttempts ?? 2;
   const payload = {
     msgtype: "markdown",
@@ -42,6 +42,7 @@ export async function sendVisitorWeComMessage(visitor: VisitorLog, options: WeCo
 
   let lastError = "";
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const attemptStartedAt = process.hrtime.bigint();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -64,12 +65,29 @@ export async function sendVisitorWeComMessage(visitor: VisitorLog, options: WeCo
         throw new Error(`WeCom errcode ${data.errcode}: ${String(data.errmsg ?? "unknown error")}`);
       }
 
-      logger?.info({ service: "wecom", attempt }, "WeCom notification sent");
+      logger?.info(
+        { service: "wecom", attempt, duration_ms: elapsedMs(attemptStartedAt).toFixed(1), timeout_ms: timeoutMs },
+        "WeCom notification sent"
+      );
       return { ok: true, mock: false, sentAt: new Date() };
     } catch (error) {
       clearTimeout(timeout);
-      lastError = error instanceof Error ? error.message : String(error);
-      logger?.warn({ service: "wecom", attempt, error: lastError }, "WeCom notification attempt failed");
+      const timedOut = error instanceof Error && error.name === "AbortError";
+      lastError = timedOut
+        ? `WeCom request timed out after ${timeoutMs}ms`
+        : error instanceof Error
+          ? error.message
+          : String(error);
+      logger?.warn(
+        {
+          service: "wecom",
+          attempt,
+          duration_ms: elapsedMs(attemptStartedAt).toFixed(1),
+          timeout_ms: timeoutMs,
+          error: lastError
+        },
+        "WeCom notification attempt failed"
+      );
     }
   }
 

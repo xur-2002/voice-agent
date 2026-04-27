@@ -22,9 +22,14 @@
 
 - Final demo uses digit-by-digit explicit phone collection:
   `收到，手机号麻烦一位一位说一下。`
+- Assistant replies are short to keep the happy path inside 25 seconds.
+- In noisy calls, the assistant asks only for the missing field instead of restarting.
 - Backend normalizes Chinese spoken digits:
   `一三三，八六六，五二五，一零` → `13386652510`.
 - Assistant submits immediately once it can parse an 11-digit phone; no phone repeat-confirmation step.
+- Backend logs `normalization_ms`, `db_write_ms`, `wecom_push_ms`, and `total_ms`.
+- WeCom push has a 3 second per-attempt timeout.
+- Consecutive calls are protected by `call_id` idempotency and multi-call tests.
 - Plate normalization repairs common Shanghai plate ASR artifacts.
 - Company aliases map `蓝色金鱼`, `蓝色鲸鱼`, and `蓝鲸` to `蓝色鲸鱼科技`.
 - Vapi can be reset to the stable explicit-phone flow with:

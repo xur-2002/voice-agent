@@ -17,6 +17,8 @@ describe("normalization", () => {
     expect(normalizePlateNumber("互为12345")).toBe("沪A12345");
     expect(normalizePlateNumber("沪 A 12345")).toBe("沪A12345");
     expect(normalizePlateNumber("沪，A，一二三四五")).toBe("沪A12345");
+    expect(normalizePlateNumber("上海 A 12345")).toBe("沪A12345");
+    expect(normalizePlateNumber("沪诶12345")).toBe("沪A12345");
     expect(normalizePlateNumber("户A12345")).toBe("沪A12345");
     expect(normalizePlateNumber("护A12345")).toBe("沪A12345");
   });
